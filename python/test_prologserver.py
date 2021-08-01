@@ -266,7 +266,7 @@ class TestPrologServer(ParametrizedTestCase):
 
     def test_sync_query_slow(self):
         if self.essentialOnly:
-            print("skipped")
+            print("skipped", flush=True, end=" ")
             return
 
         with PrologServer(self.launchServer, self.serverPort, self.password, self.useUnixDomainSocket, prolog_path=self.prologPath) as server:
@@ -403,7 +403,7 @@ class TestPrologServer(ParametrizedTestCase):
 
     def test_async_query_slow(self):
         if self.essentialOnly:
-            print("skipped")
+            print("skipped", flush=True, end=" ")
             return
 
         with PrologServer(self.launchServer, self.serverPort, self.password, self.useUnixDomainSocket, prolog_path=self.prologPath) as server:
@@ -428,7 +428,7 @@ class TestPrologServer(ParametrizedTestCase):
 
     def test_protocol_edge_cases(self):
         if self.essentialOnly:
-            print("skipped")
+            print("skipped", flush=True, end=" ")
             return
 
         with PrologServer(self.launchServer, self.serverPort, self.password, self.useUnixDomainSocket, prolog_path=self.prologPath) as server:
@@ -453,7 +453,7 @@ class TestPrologServer(ParametrizedTestCase):
 
     def test_connection_close_with_running_query(self):
         if self.essentialOnly:
-            print("skipped")
+            print("skipped", flush=True, end=" ")
             return
 
         with PrologServer(self.launchServer, self.serverPort, self.password, self.useUnixDomainSocket, prolog_path=self.prologPath) as server:
@@ -502,7 +502,7 @@ class TestPrologServer(ParametrizedTestCase):
     # then check to see if they all finished
     def test_multiple_connections(self):
         if self.essentialOnly:
-            print("skipped")
+            print("skipped", flush=True, end=" ")
             return
 
         with PrologServer(self.launchServer, self.serverPort, self.password, self.useUnixDomainSocket, prolog_path=self.prologPath) as server:
@@ -702,7 +702,7 @@ class TestPrologServer(ParametrizedTestCase):
 
     def test_server_options_and_shutdown_slow(self):
         if self.essentialOnly:
-            print("skipped")
+            print("skipped", flush=True, end=" ")
             return
 
         with PrologServer(self.launchServer, self.serverPort, self.password, self.useUnixDomainSocket, prolog_path=self.prologPath) as server:
@@ -919,7 +919,7 @@ def load_tests(loader, standard_tests, pattern):
 # This code is to allow the runner of the test to set environment variables
 # That run a smaller set of tests (ESSENTIAL_TESTS_ONLY=True) or to set
 # the path and args to use when PrologServer launches the Prolog process
-# the latter is designed for running in the SWI Prolog build system since 
+# the latter is designed for running in the SWI Prolog build system since
 # it needs certain arguments passed along
 essentialOnly = os.getenv('ESSENTIAL_TESTS_ONLY') == 'True'
 prologPath = os.getenv('PROLOG_PATH')
@@ -940,7 +940,7 @@ else:
     prologArgs = None
 
 if __name__ == '__main__':
-    print("**** Note that some builds of Prolog will print out messages about 'Execution Aborted' or 'did not clear exception...' when running tests.  Ignore them.")
+    print("**** Note that some builds of Prolog will print out messages about 'Execution Aborted' or 'did not clear exception...' when running tests.  Ignore them.", flush=True)
 
     # perfLogger = logging.getLogger("swiplserver")
     # perfLogger.setLevel(logging.DEBUG)
