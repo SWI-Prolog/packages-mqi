@@ -32,7 +32,8 @@
 */
 
 :- module(test_language_server,
-          [ test_language_server/0
+          [ test_language_server/0,
+            test_language_server_all/0
           ]).
 :- use_module(library(plunit)).
 :- use_module(library(process)).
@@ -42,12 +43,14 @@
 :- debug(test).
 
 test_language_server :-
+    run_tests([py_language_server_fast]).
+test_language_server_all :-
     run_tests([py_language_server]).
 
 % Launch the python script with command line arguments so it can, in turn,
 % launch the proper development build of prolog, passing all the same command
 % line arguments to it
-run_test_script(Script, Status) :-
+run_test_script(Script, Status, EssentialOnly) :-
     source_file(test_language_server, ThisFile),
     file_directory_name(ThisFile, ThisDir),
     current_prolog_flag(os_argv, [_|Args]),
@@ -64,7 +67,7 @@ run_test_script(Script, Status) :-
                      cwd(ThisDir),
                      environment([ 'PROLOG_PATH'=Swipl_Path,
                                    'PROLOG_ARGS'=Args_String,
-                                   'ESSENTIAL_TESTS_ONLY'='True'
+                                   'ESSENTIAL_TESTS_ONLY'=EssentialOnly
                                  ])]),
     (   debugging(test)
     ->  copy_stream_data(Out, current_output)
@@ -75,9 +78,16 @@ run_test_script(Script, Status) :-
     ),
     process_wait(PID, Status).
 
+:- begin_tests(py_language_server_fast, []).
+
+test(language_server, Status == exit(0)):-
+    run_test_script('python/test_prologserver.py', Status, 'True').
+
+:- end_tests(py_language_server_fast).
+
 :- begin_tests(py_language_server, []).
 
 test(language_server, Status == exit(0)):-
-    run_test_script('python/test_prologserver.py', Status).
+    run_test_script('python/test_prologserver.py', Status, 'False').
 
 :- end_tests(py_language_server).
