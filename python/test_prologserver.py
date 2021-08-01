@@ -60,12 +60,12 @@ class TestPrologServer(ParametrizedTestCase):
         # Turn it off if essentialOnly
         if not essentialOnly:
             count = 0
-            while count < 5:
+            while count < 10:
                 currentCount = self.process_count("swipl")
                 if currentCount == self.initialProcessCount:
                     break
                 else:
-                    sleep(2)
+                    sleep(1)
                 count += 1
             self.assertEqual(currentCount, self.initialProcessCount)
 
@@ -220,6 +220,10 @@ class TestPrologServer(ParametrizedTestCase):
                 self.round_trip_prolog(client, "'a b'(['1b', 'a b'])")
 
     def test_sync_query(self):
+        if self.essentialOnly:
+            print("skipped", flush=True, end=" ")
+            return
+
         with PrologServer(self.launchServer, self.serverPort, self.password, self.useUnixDomainSocket, prolog_path=self.prologPath) as server:
             with server.create_thread() as client:
                 # Most basic query with single answer and no free variables
@@ -276,6 +280,10 @@ class TestPrologServer(ParametrizedTestCase):
                 self.assertGreater(client._heartbeat_count, 0)
 
     def test_async_query(self):
+        if self.essentialOnly:
+            print("skipped", flush=True, end=" ")
+            return
+
         with PrologServer(self.launchServer, self.serverPort, self.password, self.useUnixDomainSocket, prolog_path=self.prologPath) as server:
             with server.create_thread() as client:
                 # Cancelling while nothing is happening should throw
@@ -541,6 +549,10 @@ class TestPrologServer(ParametrizedTestCase):
                         controlThread.query("mutex_destroy(test), retractall(ended(_)), retractall(started(_))")
 
     def test_multiple_serial_connections(self):
+        if self.essentialOnly:
+            print("skipped", flush=True, end=" ")
+            return
+
         # Multiple connections can run serially
         with PrologServer(self.launchServer, self.serverPort, self.password, self.useUnixDomainSocket, prolog_path=self.prologPath) as server:
             with server.create_thread() as prologThread:
@@ -556,6 +568,10 @@ class TestPrologServer(ParametrizedTestCase):
                 self.assertEqual(result, True)
 
     def test_goal_thread_failure(self):
+        if self.essentialOnly:
+            print("skipped", flush=True, end=" ")
+            return
+
         # If the goal thread fails, we should get a specific exception and the thread should be left for inspection
         with PrologServer(self.launchServer, self.serverPort, self.password, self.useUnixDomainSocket, prolog_path=self.prologPath) as server:
             with server.create_thread() as prologThread:
@@ -820,6 +836,10 @@ class TestPrologServer(ParametrizedTestCase):
         self.assertTrue(exceptionCaught)
 
     def test_debugging_options(self):
+        if self.essentialOnly:
+            print("skipped", flush=True, end=" ")
+            return
+
         tempDir = gettempdir()
         # Put a space in to make sure escaping is working
         tempFile = os.path.join(tempDir, "swiplserver output.txt")
@@ -940,7 +960,7 @@ else:
     prologArgs = None
 
 if __name__ == '__main__':
-    print("**** Note that some builds of Prolog will print out messages about 'Execution Aborted' or 'did not clear exception...' when running tests.  Ignore them.", flush=True)
+    print("Note that some builds of Prolog will print out messages about\n'Execution Aborted' or 'did not clear exception...' when running tests.  Ignore them.", flush=True)
 
     # perfLogger = logging.getLogger("swiplserver")
     # perfLogger.setLevel(logging.DEBUG)
