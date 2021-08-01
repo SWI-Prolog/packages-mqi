@@ -5,7 +5,7 @@
     Copyright (c)  2021, Eric Zinda
     All rights reserved.
 
-        Redistribution and use in source and binary forms, with or without
+    Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions
     are met:
 
@@ -31,11 +31,15 @@
     POSSIBILITY OF SUCH DAMAGE.
 */
 
+:- module(test_language_server,
+          [ test_language_server/0
+          ]).
 :- use_module(library(plunit)).
-:- use_module(language_server).
+:- use_module(library(process)).
+:- use_module(library(debug)).
+:- use_module(library(language_server)).
 
-% Set so that the python script can be loaded
-:- prolog_load_context(directory, Dir), working_directory(_, Dir).
+:- debug(test).
 
 test_language_server :-
     run_tests([py_language_server]).
@@ -43,38 +47,37 @@ test_language_server :-
 % Launch the python script with command line arguments so it can, in turn,
 % launch the proper development build of prolog, passing all the same command
 % line arguments to it
-run_test_script(Script, Status):-
-    current_prolog_flag(os_argv, [Swipl | Args]),
-    (   is_absolute_file_name(Swipl)
-    ->  file_directory_name(Swipl, Swipl_Path)
-    ;   Swipl_Path = ''
-    ),
+run_test_script(Script, Status) :-
+    source_file(test_language_server, ThisFile),
+    file_directory_name(ThisFile, ThisDir),
+    current_prolog_flag(os_argv, [_|Args]),
+    current_prolog_flag(executable, Swipl_exe),
+    absolute_file_name(Swipl_exe, Swipl),
+    file_directory_name(Swipl, Swipl_Path),
     atomic_list_concat(Args, '~|~', Args_String),
-    writeln(Args_String),
-    writeln(data(Swipl_Path, Args_String)),
+    debug(test, 'swipl in dir ~p; Packed args: ~p', [Swipl_Path, Args_String]),
     process_create(path(python3), [Script],
-        [stdin(std), stdout(pipe(Out)), stderr(pipe(Out)), process(PID), environment(
-                ['PROLOG_PATH'=Swipl_Path, 'PROLOG_ARGS' = Args_String, 'ESSENTIAL_TESTS_ONLY'='True']
-            )]),
-    read_lines(Out, Lines),
-    writeln(Lines),
+                   [ stdin(std),
+                     stdout(pipe(Out)),
+                     stderr(pipe(Out)),
+                     process(PID),
+                     cwd(ThisDir),
+                     environment([ 'PROLOG_PATH'=Swipl_Path,
+                                   'PROLOG_ARGS'=Args_String,
+                                   'ESSENTIAL_TESTS_ONLY'='True'
+                                 ])]),
+    (   debugging(test)
+    ->  copy_stream_data(Out, current_output)
+    ;   setup_call_cleanup(
+            open_null_stream(Null),
+            copy_stream_data(Out, Null),
+            close(Null))
+    ),
     process_wait(PID, Status).
 
 :- begin_tests(py_language_server, []).
 
-test(language_server):-
-    run_test_script('python/test_prologserver.py', Status),
-    assertion(Status == exit(0)).
+test(language_server, Status == exit(0)):-
+    run_test_script('python/test_prologserver.py', Status).
 
 :- end_tests(py_language_server).
-
-read_lines(Out, Lines) :-
-        read_line_to_codes(Out, Line1),
-        read_lines(Line1, Out, Lines).
-
-read_lines(end_of_file, _, []) :- !.
-read_lines(Codes, Out, [Line|Lines]) :-
-        atom_codes(Line_Initial, Codes),
-        atomic_list_concat([Line_Initial, '\n'], Line),
-        read_line_to_codes(Out, Line2),
-        read_lines(Line2, Out, Lines).
