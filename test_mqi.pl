@@ -31,27 +31,27 @@
     POSSIBILITY OF SUCH DAMAGE.
 */
 
-:- module(test_language_server,
-          [ test_language_server/0,
-            test_language_server_all/0
+:- module(test_mqi,
+          [ test_mqi/0,
+            test_mqi_all/0
           ]).
 :- use_module(library(plunit)).
 :- use_module(library(process)).
 :- use_module(library(debug)).
-:- use_module(library(language_server)).
+:- use_module(library(mqi)).
 
 :- debug(test).
 
-test_language_server :-
-    run_tests([py_language_server_fast]).
-test_language_server_all :-
-    run_tests([py_language_server]).
+test_mqi :-
+    run_tests([py_mqi_fast]).
+test_mqi_all :-
+    run_tests([py_mqi]).
 
 % Launch the python script with command line arguments so it can, in turn,
 % launch the proper development build of prolog, passing all the same command
 % line arguments to it
 run_test_script(Script, Status, EssentialOnly) :-
-    source_file(test_language_server, ThisFile),
+    source_file(test_mqi, ThisFile),
     file_directory_name(ThisFile, ThisDir),
     current_prolog_flag(os_argv, [_|Args]),
     current_prolog_flag(executable, Swipl_exe),
@@ -78,16 +78,16 @@ run_test_script(Script, Status, EssentialOnly) :-
     ),
     process_wait(PID, Status).
 
-:- begin_tests(py_language_server_fast, []).
+:- begin_tests(py_mqi_fast, []).
 
-test(language_server, Status == exit(0)):-
+test(mqi, Status == exit(0)):-
     run_test_script('python/test_prologserver.py', Status, 'True').
 
-:- end_tests(py_language_server_fast).
+:- end_tests(py_mqi_fast).
 
-:- begin_tests(py_language_server, []).
+:- begin_tests(py_mqi, []).
 
-test(language_server, Status == exit(0)):-
+test(mqi, Status == exit(0)):-
     run_test_script('python/test_prologserver.py', Status, 'False').
 
-:- end_tests(py_language_server).
+:- end_tests(py_mqi).

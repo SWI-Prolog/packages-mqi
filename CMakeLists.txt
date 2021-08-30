@@ -1,24 +1,24 @@
 cmake_minimum_required(VERSION 3.5)
-project(swipl-language_server)
+project(swipl-mqi)
 
 include("../cmake/PrologPackage.cmake")
 
-swipl_plugin(language_server
-	     PL_LIBS language_server.pl)
+swipl_plugin(mqi
+	     PL_LIBS mqi.pl)
 
-pkg_doc(language_server
+pkg_doc(mqi
         SECTION
-            language_server_overview.md
-            SOURCE language_server.pl language_serverpl.tex)
+            mqi_overview.md
+            SOURCE mqi.pl mqipl.tex)
 
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/packages/language_server/python/swiplserver
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/packages/mqi/python/swiplserver
         DESTINATION ${SWIPL_INSTALL_PREFIX}/lib)
 
-test_libs(language_server
+test_libs(mqi
 	  PACKAGES plunit)
 
 if(INSTALL_TESTS)
   install(DIRECTORY python
-	  DESTINATION ${INSTALL_TESTS_DIR}/packages/language_server
+	  DESTINATION ${INSTALL_TESTS_DIR}/packages/mqi
 	  FILES_MATCHING PATTERN "*.py")
 endif()

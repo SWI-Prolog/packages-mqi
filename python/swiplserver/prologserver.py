@@ -16,23 +16,23 @@ Allows using SWI Prolog as an embedded part of an application, "like a library".
 
 `swiplserver` provides:
 
- - The `PrologServer` class that automatically manages starting and stopping the SWI Prolog instance(s) and runs the `language_server/1` predicate which starts a JSON query server.
+ - The `PrologServer` class that automatically manages starting and stopping the SWI Prolog instance(s) and runs the `mqi/1` predicate which starts a JSON query server.
  - The `PrologThread` class is used to run queries on the created process. Queries are run exactly as they would be if you were interacting with the SWI Prolog "top level" (i.e. the Prolog command line).
 
 Installation:
 
     1. Install SWI Prolog (www.swi-prolog.org) and ensure that "swipl" is on the system path.
     2. Either "pip install swiplserver" or copy the "swiplserver" library (the whole directory) from the "libs" directory of your SWI Prolog installation to be a subdirectory of your Python project.
-    3. Check if your SWI Prolog version includes the Language Server by launching it and typing `?- language_server([]).` If it can't find it, see below for how to install it.
+    3. Check if your SWI Prolog version includes the Language Server by launching it and typing `?- mqi([]).` If it can't find it, see below for how to install it.
 
     If your SWI Prolog doesn't yet include the language server:
 
-    1. Download the `language_server.pl` file from the [GitHub repository](https://github.com/EricZinda/swiplserver/tree/main/language_server).
-    2. Open an operating system command prompt and go to the directory where you downloaded `language_server.pl`.
+    1. Download the `mqi.pl` file from the [GitHub repository](https://github.com/EricZinda/swiplserver/tree/main/mqi).
+    2. Open an operating system command prompt and go to the directory where you downloaded `mqi.pl`.
     3. Run the below command. On Windows the command prompt must be [run as an administrator](https://www.wikihow.com/Run-Command-Prompt-As-an-Administrator-on-Windows). On Mac or Linux, start the command with `sudo` as in `sudo swipl -s ...`.
 
     ~~~
-    swipl -s language_server.pl -g "language_server:install_to_library('language_server.pl')" -t halt
+    swipl -s mqi.pl -g "mqi:install_to_library('mqi.pl')" -t halt
     ~~~
 Usage:
 
@@ -101,9 +101,9 @@ Exceptions in Prolog code are raised using Python's native exception facilities.
 Debugging:
     When using `swiplserver`, debugging the Prolog code itself can often be done by viewing traces from the Prolog native `writeln/1` or `debug/3` predicates and viewing their output in the debugger output window.  Sometimes an issue occurs deep in an application and it would be easier to set breakpoints and view traces in Prolog itself. Running SWI Prolog manually and launching the server that `swiplserver` uses within it in "Standalone mode" is designed for this scenario.
 
-    `swiplserver` normally launches SWI Prolog and starts the `language_server/1` predicate within it so that it can connect and run queries. This predicate is defined in the `language_server.pl` file included in the `swiplserver` module. To debug your code using Prolog itself, you can do this manually and connect your application to it. A typical flow for standalone mode is:
+    `swiplserver` normally launches SWI Prolog and starts the `mqi/1` predicate within it so that it can connect and run queries. This predicate is defined in the `mqi.pl` file included in the `swiplserver` module. To debug your code using Prolog itself, you can do this manually and connect your application to it. A typical flow for standalone mode is:
 
-    1. Launch SWI Prolog and call the `language_server/1` predicate defined in the `language_server.pl` file that is part of the module, specifying a port and password (documentation is [here]( https://blog.inductorsoftware.com/swiplserver/language_server/language_server.html)). Use the `tdebug/0` predicate to set all threads to debugging mode like this: `tdebug, language_server(port(4242), password(debugnow))`.
+    1. Launch SWI Prolog and call the `mqi/1` predicate defined in the `mqi.pl` file that is part of the module, specifying a port and password (documentation is [here]( https://blog.inductorsoftware.com/swiplserver/mqi/mqi.html)). Use the `tdebug/0` predicate to set all threads to debugging mode like this: `tdebug, mqi(port(4242), password(debugnow))`.
     2. Set the selected port and password when you call `PrologServer.__init__()`.
     3. Launch the application and go through the steps to reproduce the issue.
 
@@ -228,7 +228,7 @@ class   PrologServer:
 
         All arguments are optional and the defaults are set to the recommended settings that work best on all platforms during development. In production on Unix systems, consider using unix_domain_socket to further decrease security attack surface area.
 
-        For debugging scenarios, SWI Prolog can be launched manually and this class can be configured to (locally) connect to it using launch_server = False. This allows for inspection of the server state and using the SWI Prolog debugging tools while your application is running. See the documentation for the Prolog `language_server/1` predicate for more information on how to run the language server in "Standalone Mode".
+        For debugging scenarios, SWI Prolog can be launched manually and this class can be configured to (locally) connect to it using launch_server = False. This allows for inspection of the server state and using the SWI Prolog debugging tools while your application is running. See the documentation for the Prolog `mqi/1` predicate for more information on how to run the language server in "Standalone Mode".
 
         Examples:
             To automatically launch a SWI Prolog process using TCP/IP localhost to communicate with an automatically chosen port and password (the default):
@@ -236,7 +236,7 @@ class   PrologServer:
                 with PrologServer() as server:
                     # your code here
 
-            To connect to an existing SWI Prolog process that has already started the language_server/1 predicate and is using an automatically generated Unix Domain Socket and a password of '8UIDSSDXLPOI':
+            To connect to an existing SWI Prolog process that has already started the mqi/1 predicate and is using an automatically generated Unix Domain Socket and a password of '8UIDSSDXLPOI':
 
                 with PrologServer(launch_server = False,
                                   unix_domain_socket = '',
@@ -244,17 +244,17 @@ class   PrologServer:
                     # your code here
 
         Args:
-            launch_server: True (default) launch a SWI Prolog process on `PrologServer.start()` and shuts it down automatically on `PrologServer.stop()` (or after a resource manager like the Python "with" statement exits). False connects to an existing SWI Prolog process that is running the language_server/1 predicate (i.e. "Standalone Mode"). When False, password and one of port or unix_domain_socket must be specified to match the options provided to `language_server/1` in the separate SWI Prolog process.
+            launch_server: True (default) launch a SWI Prolog process on `PrologServer.start()` and shuts it down automatically on `PrologServer.stop()` (or after a resource manager like the Python "with" statement exits). False connects to an existing SWI Prolog process that is running the mqi/1 predicate (i.e. "Standalone Mode"). When False, password and one of port or unix_domain_socket must be specified to match the options provided to `mqi/1` in the separate SWI Prolog process.
 
             port: The TCP/IP localhost port to use for communication with the SWI Prolog process. Ignored if unix_domain_socket is not None.
 
                 - When launch_server is True, None (default) automatically picks an open port that the server and this class both use.
-                - When launch_server is False, must be set to match the port specified in language_server/1 of the running SWI Prolog process.
+                - When launch_server is False, must be set to match the port specified in mqi/1 of the running SWI Prolog process.
 
             password: The password to use for connecting to the SWI Prolog process. This is to prevent malicious users from connecting to the server since it can run arbitrary code.  Allowing the server to generate a strong password by using None is recommended.
 
                 - When launch_server is True, None (default) automatically generates a strong password using a uuid. Other values specify the password to use.
-                - When launch_server is False, must be set to match the password specified in language_server/1 of the running SWI Prolog process.
+                - When launch_server is False, must be set to match the password specified in mqi/1 of the running SWI Prolog process.
 
             unix_domain_socket: None (default) use localhost TCP/IP for communication with the SWI Prolog process. Otherwise (only on Unix) is either a fully qualified path and filename of the Unix Domain Socket to use or an empty string (recommended). An empty string will cause a temporary directory to be created using Prolog's `tmp_file/2` and a socket file will be created within that directory following the below requirements.  If the directory and file are unable to be created for some reason, `PrologServer.start()` with raise an exception. Specifying a file to use should follow the same guidelines as the generated file:
 
@@ -274,8 +274,8 @@ class   PrologServer:
 
             server_traces: (Only used in unusual debugging circumstances) Since these are Prolog traces, where they go is determined by output_file_name.
 
-                - None (the default) does not turn on language_server tracing
-                - "_" turns on all tracing output from Prolog `language_server/1` server (i.e. runs `debug(language_server(_)).` in Prolog).
+                - None (the default) does not turn on mqi tracing
+                - "_" turns on all tracing output from Prolog `mqi/1` server (i.e. runs `debug(mqi(_)).` in Prolog).
                 - "protocol" turns on only protocol level messages (which results in much less data in the trace for large queries)
                 - "query" turns on only messages about the query.
 
@@ -366,7 +366,7 @@ class   PrologServer:
             swiplPath = os.path.join(self._prolog_path, "swipl") if self._prolog_path is not None else "swipl"
             launchArgs = [swiplPath] + (self._prolog_path_args if self._prolog_path_args is not None else []) + [
                           "--quiet",
-                          "-g", "language_server",
+                          "-g", "mqi",
                           "-t", "halt",
                           "--",
                           "--write_connection_values=true"]
@@ -425,7 +425,7 @@ class   PrologServer:
 
             if self._server_traces is not None:
                 with self.create_thread() as prologThread:
-                    prologThread.query("debug(language_server({}))".format(self._server_traces))
+                    prologThread.query("debug(mqi({}))".format(self._server_traces))
 
     def create_thread(self):
         """

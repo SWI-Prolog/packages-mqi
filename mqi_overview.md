@@ -26,18 +26,18 @@ A Python 3.x library that integrates Python with SWI Prolog using the language s
 In general, to use the language server with any programming language:
 
     1. Install SWI Prolog itself on the machine the application will run on.
-    2. Check if your SWI Prolog version includes the Language Server by launching it and typing `?- language_server([]).` If it can't find it, see below for how to install it.
+    2. Check if your SWI Prolog version includes the Language Server by launching it and typing `?- mqi([]).` If it can't find it, see below for how to install it.
     3. Ensure that the system path includes a path to the `swipl` executable from that installation.
     4. Make sure the application (really the user that launches the application) has permission to launch the SWI Prolog process. Unless your system is unusually locked down, this should be allowed by default.  If not, you'll need to set the appropriate permissions to allow this.
     5. Install (or write!) the library you'll be using to access the language server in your language of choice.
 
 If your SWI Prolog version doesn't yet include the language server:
-    1. Download the =|language_server.pl|= file from the [GitHub repository](https://github.com/EricZinda/swiplserver/tree/main/language_server).
-    2. Open an operating system command prompt and go to the directory where you downloaded =|language_server.pl|=.
+    1. Download the =|mqi.pl|= file from the [GitHub repository](https://github.com/EricZinda/swiplserver/tree/main/mqi).
+    2. Open an operating system command prompt and go to the directory where you downloaded =|mqi.pl|=.
     3. Run the command below. On Windows the command prompt must be [run as an administrator](https://www.wikihow.com/Run-Command-Prompt-As-an-Administrator-on-Windows). On Mac or Linux, start the command with `sudo` as in `sudo swipl -s ...`.
 
 ~~~
-swipl -s language_server.pl -g "language_server:install_to_library('language_server.pl')" -t halt
+swipl -s mqi.pl -g "mqi:install_to_library('mqi.pl')" -t halt
 ~~~
 
 ## Prolog Language Differences from the Top Level {#language-server-toplevel-differences}
@@ -75,14 +75,14 @@ The basic rule to remember is: any predicates designed to interact with or chang
 
 
 ## Embedded Mode: Integrating the Language Server Into a New Programming Language {#language-server-embedded-mode}
-The most common way to use the language server is to find a library that wraps and exposes it as a native part of another programming language such as the [Python =|swiplserver|= library](#language-server-python-installation). This section describes how to build one if there isn't yet a library for your language.  To do this, you'll need to familiarize yourself with the server protocol as described in the `language_server/1` documentation. However, to give an idea of the scope of work required, below is a typical interaction done (invisibly to the user) in the implementation of any programming language library:
+The most common way to use the language server is to find a library that wraps and exposes it as a native part of another programming language such as the [Python =|swiplserver|= library](#language-server-python-installation). This section describes how to build one if there isn't yet a library for your language.  To do this, you'll need to familiarize yourself with the server protocol as described in the `mqi/1` documentation. However, to give an idea of the scope of work required, below is a typical interaction done (invisibly to the user) in the implementation of any programming language library:
 
 
-     1. Launch the SWI Prolog process using (along with any other options the user requests): =|swipl --quiet -g language_server -t halt -- --write_connection_values=true|=.  To work, the `swipl` Prolog executable will need to be on the path or specified in the command. This launches the server and writes the chosen port and password to STDOUT.  This way of launching invokes the language_server/0 predicate that turns off the `int` (i.e. Interrupt/SIGINT) signal to Prolog. This is because some languages (such as Python) use that signal during debugging and it would be otherwise passed to the client Prolog process and switch it into the debugger.  See the language_server/0 predicate for more information on other command line options.
+     1. Launch the SWI Prolog process using (along with any other options the user requests): =|swipl --quiet -g mqi -t halt -- --write_connection_values=true|=.  To work, the `swipl` Prolog executable will need to be on the path or specified in the command. This launches the server and writes the chosen port and password to STDOUT.  This way of launching invokes the mqi/0 predicate that turns off the `int` (i.e. Interrupt/SIGINT) signal to Prolog. This is because some languages (such as Python) use that signal during debugging and it would be otherwise passed to the client Prolog process and switch it into the debugger.  See the mqi/0 predicate for more information on other command line options.
      2. Read the SWI Prolog STDOUT to retrieve the TCP/IP port and password. They are sent in that order, delimited by '\n'.
 
 ~~~
-$ swipl --quiet -g language_server -t halt -- --write_connection_values=true
+$ swipl --quiet -g mqi -t halt -- --write_connection_values=true
 54501
 185786669688147744015809740744888120144
 ~~~
@@ -105,7 +105,7 @@ $ nc 127.0.0.1 54501
         [
           [
         {
-          "args": ["language_server1_conn2_comm", "language_server1_conn2_goal" ],
+          "args": ["mqi1_conn2_comm", "mqi1_conn2_goal" ],
           "functor":"threads"
         }
           ]
@@ -137,7 +137,7 @@ Note that Unix Domain Sockets can be used instead of a TCP/IP port. How to do th
 
 Here's the same example running in the R language. Note that this is *not* an example of how to use the language server from R, it just shows the first code a developer would write as they begin to build a nice library to connect R to Prolog using the language server:
 ~~~
-# Server run with: swipl language_server.pl --port=40001 --password=123
+# Server run with: swipl mqi.pl --port=40001 --password=123
 # R Source
 print("# Establish connection")
 
@@ -171,7 +171,7 @@ And here's the output:
 
 [1] "# Send password"
 
-[1] "172.\n{\n "args": [\n [\n [\n\t{\n\t "args": ["language_server1_conn1_comm", "language_server1_conn1_goal" ],\n\t "functor":"threads"\n\t}\n ]\n ]\n ],\n "functor":"true"\n}"
+[1] "172.\n{\n "args": [\n [\n [\n\t{\n\t "args": ["mqi1_conn1_comm", "mqi1_conn1_goal" ],\n\t "functor":"threads"\n\t}\n ]\n ]\n ],\n "functor":"true"\n}"
 
 [1] "# Run query"
 
@@ -182,7 +182,7 @@ And here's the output:
 
 Other notes about creating a new library to communicate with the language server:
 - Where appropriate, use similar names and approaches to the [Python library](https://github.com/EricZinda/swiplserver) when designing your language library. This will give familiarity and faster learning for users that use more than one language.
-- Use the `debug/1` predicate described in the `language_server/1` documentation to turn on debug tracing. It can really speed up debugging.
+- Use the `debug/1` predicate described in the `mqi/1` documentation to turn on debug tracing. It can really speed up debugging.
 - Read the STDOUT and STDERR output of the SWI Prolog process and output them to the debugging console of the native language to help users debug their Prolog application.
 
 ## Standalone Mode: Debugging Prolog Code Used in an Application {#language-server-standalone-mode}
@@ -190,14 +190,14 @@ When using the language server from another language, debugging the Prolog code 
 
 As the language server is a multithreaded application, debugging the running code requires using the multithreaded debugging features of SWI Prolog as described in the section on ["Debugging Threads"](threaddebug) in the SWI Prolog documentation. A typical flow for Standalone Mode is:
 
-    1. Launch SWI Prolog and call the `language_server/1` predicate specifying a port and password. Use the `tdebug/0` predicate to set all threads to debugging mode like this: `tdebug, language_server([port(4242), password(debugnow)])`.
+    1. Launch SWI Prolog and call the `mqi/1` predicate specifying a port and password. Use the `tdebug/0` predicate to set all threads to debugging mode like this: `tdebug, mqi([port(4242), password(debugnow)])`.
     2. Set the port and password in the initialization API in the native language being used.
     3. Launch the application and go through the steps to reproduce the issue.
 
 In Python this would look like:
 ~~~
 % From the SWI Prolog top level
-?- tdebug, language_server([port(4242), password(debugnow)]).
+?- tdebug, mqi([port(4242), password(debugnow)]).
 % The graphical front-end will be used for subsequent tracing
 true.
 ~~~

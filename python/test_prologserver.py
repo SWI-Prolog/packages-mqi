@@ -622,14 +622,14 @@ class TestPrologServer(ParametrizedTestCase):
                 socketPort = 4250
 
                 # password() should be used if supplied.
-                result = monitorThread.query("language_server([port(Port), password(testpassword), server_thread(ServerThreadID)])")
+                result = monitorThread.query("mqi([port(Port), password(testpassword), server_thread(ServerThreadID)])")
                 serverThreadID = result[0]["ServerThreadID"]
                 port = result[0]["Port"]
                 with PrologServer(launch_server=False, port=port, password="testpassword", prolog_path=self.prologPath) as newServer:
                     with newServer.create_thread() as prologThread:
                         result = prologThread.query("true")
                         self.assertEqual(result, True)
-                result = monitorThread.query("stop_language_server({})".format(serverThreadID))
+                result = monitorThread.query("stop_mqi({})".format(serverThreadID))
                 self.assertEqual(result, True)
                 afterShutdownThreads = self.thread_list(monitorThread)
                 self.assertEqual(afterShutdownThreads, initialThreads)
@@ -638,27 +638,27 @@ class TestPrologServer(ParametrizedTestCase):
                     # unixDomainSocket() should be used if supplied (non-windows).
                     socketPath = mkdtemp()
                     unixDomainSocket = PrologServer.unix_domain_socket_file(socketPath)
-                    result = monitorThread.query("language_server([unix_domain_socket('{}'), password(testpassword), server_thread(ServerThreadID)])".format(unixDomainSocket))
+                    result = monitorThread.query("mqi([unix_domain_socket('{}'), password(testpassword), server_thread(ServerThreadID)])".format(unixDomainSocket))
                     serverThreadID = result[0]["ServerThreadID"]
                     with PrologServer(launch_server=False, unix_domain_socket=unixDomainSocket, password="testpassword", prolog_path=self.prologPath) as newServer:
                         with newServer.create_thread() as prologThread:
                             result = prologThread.query("true")
                             self.assertEqual(result, True)
-                    result = monitorThread.query("stop_language_server({})".format(serverThreadID))
+                    result = monitorThread.query("stop_mqi({})".format(serverThreadID))
                     self.assertEqual(result, True)
                     afterShutdownThreads = self.thread_list(monitorThread)
                     self.assertEqual(afterShutdownThreads, initialThreads)
                     assert not os.path.exists(unixDomainSocket)
 
                     # unixDomainSocket() should be generated if asked for (non-windows).
-                    result = monitorThread.query("language_server([unix_domain_socket(Socket), password(testpassword), server_thread(ServerThreadID)])")
+                    result = monitorThread.query("mqi([unix_domain_socket(Socket), password(testpassword), server_thread(ServerThreadID)])")
                     serverThreadID = result[0]["ServerThreadID"]
                     unixDomainSocket = result[0]["Socket"]
                     with PrologServer(launch_server=False, unix_domain_socket=unixDomainSocket, password="testpassword", prolog_path=self.prologPath) as newServer:
                         with newServer.create_thread() as prologThread:
                             result = prologThread.query("true")
                             self.assertEqual(result, True)
-                    result = monitorThread.query("stop_language_server({})".format(serverThreadID))
+                    result = monitorThread.query("stop_mqi({})".format(serverThreadID))
                     self.assertEqual(result, True)
                     afterShutdownThreads = self.thread_list(monitorThread)
                     self.assertEqual(afterShutdownThreads, initialThreads)
@@ -670,7 +670,7 @@ class TestPrologServer(ParametrizedTestCase):
                 # runServerOnThread(false) should block until the server is shutdown.
                 # Create a new connection that we block starting a new server
                 with server.create_thread() as blockedThread:
-                    blockedThread.query_async("language_server([port({}), password(testpassword), run_server_on_thread(false), server_thread(testServerThread)])".format
+                    blockedThread.query_async("mqi([port({}), password(testpassword), run_server_on_thread(false), server_thread(testServerThread)])".format
                             (socketPort))
                     # Wait for the server to start
                     sleep(1)
@@ -698,7 +698,7 @@ class TestPrologServer(ParametrizedTestCase):
 
                     # Now shut it down by cancelling the query and running stop
                     blockedThread.cancel_query_async()
-                    result = monitorThread.query("stop_language_server({})".format(blockedThread.communication_thread_id))
+                    result = monitorThread.query("stop_mqi({})".format(blockedThread.communication_thread_id))
                     self.assertEqual(result, True)
 
                 # And make sure all the threads went away
@@ -730,11 +730,11 @@ class TestPrologServer(ParametrizedTestCase):
                 # When starting a server, some variables can be filled in with defaults. Also: only the server thread should be created
                 # Launch the new server with appropriate options specified with variables to make sure they get filled in
                 if os.name == "nt":
-                    result = monitorThread.query("language_server([port(Port), server_thread(ServerThreadID), password(Password)])")
+                    result = monitorThread.query("mqi([port(Port), server_thread(ServerThreadID), password(Password)])")
                     optionsDict = result[0]
                     assert "Port" in optionsDict and "ServerThreadID" in optionsDict and "Password" in optionsDict
                 else:
-                    result = monitorThread.query("language_server([port(Port), server_thread(ServerThreadID), password(Password), unix_domain_socket(Unix)])")
+                    result = monitorThread.query("mqi([port(Port), server_thread(ServerThreadID), password(Password), unix_domain_socket(Unix)])")
                     optionsDict = result[0]
                     assert "Port" in optionsDict and "ServerThreadID" in optionsDict and "Password" in optionsDict and "Unix" in optionsDict
 
@@ -745,8 +745,8 @@ class TestPrologServer(ParametrizedTestCase):
                 # Only a server thread should have been started
                 assert len(testThreads) - len(initialThreads) == 1
 
-                # stop_language_server should remove all (and only) created threads and the Unix Domain File (which is tested on self.tearDown())
-                result = monitorThread.query("stop_language_server({})".format(optionsDict["ServerThreadID"]))
+                # stop_mqi should remove all (and only) created threads and the Unix Domain File (which is tested on self.tearDown())
+                result = monitorThread.query("stop_mqi({})".format(optionsDict["ServerThreadID"]))
                 sleep(2)
                 afterShutdownThreads = self.thread_list(monitorThread)
                 self.assertEqual(afterShutdownThreads, initialThreads)
@@ -754,21 +754,21 @@ class TestPrologServer(ParametrizedTestCase):
                 # queryTimeout() supplied at startup should apply to queries by default. password() and port() should be used if supplied.
                 socketPort = 4250
                 result = monitorThread.query \
-                    ("language_server([query_timeout(1), port({}), password(testpassword), server_thread(ServerThreadID)])".format
+                    ("mqi([query_timeout(1), port({}), password(testpassword), server_thread(ServerThreadID)])".format
                         (socketPort))
                 serverThreadID = result[0]["ServerThreadID"]
                 with PrologServer(launch_server=False, port=socketPort, password="testpassword", prolog_path=self.prologPath) as newServer:
                     with newServer.create_thread() as prologThread:
                         self.sync_query_timeout(prologThread, sleepForSeconds=2, queryTimeout=None)
                         self.async_query_timeout(prologThread, sleepForSeconds=2, queryTimeout=None)
-                result = monitorThread.query("stop_language_server({})".format(serverThreadID))
+                result = monitorThread.query("stop_mqi({})".format(serverThreadID))
                 self.assertEqual(result, True)
                 afterShutdownThreads = self.thread_list(monitorThread)
                 self.assertEqual(afterShutdownThreads, initialThreads)
 
                 # Shutting down a server with an active query should abort it and close all threads properly.
                 result = monitorThread.query \
-                    ("language_server([port({}), password(testpassword), server_thread(ServerThreadID)])".format
+                    ("mqi([port({}), password(testpassword), server_thread(ServerThreadID)])".format
                         (socketPort))
                 serverThreadID = result[0]["ServerThreadID"]
                 with PrologServer(launch_server=False, port=socketPort, password="testpassword", prolog_path=self.prologPath) as newServer:
@@ -776,7 +776,7 @@ class TestPrologServer(ParametrizedTestCase):
                         prologThread.query_async("sleep(20)")
                 # Wait for query to start running
                 sleep(2)
-                result = monitorThread.query("stop_language_server({})".format(serverThreadID))
+                result = monitorThread.query("stop_mqi({})".format(serverThreadID))
                 assert result is True
                 afterShutdownThreads = self.thread_list(monitorThread)
                 self.assertEqual(afterShutdownThreads, initialThreads)
