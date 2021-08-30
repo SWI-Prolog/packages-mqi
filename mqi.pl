@@ -1,4 +1,4 @@
-:- module(mqi, [mqi/0, mqi/1, stop_mqi/1]).
+:- module(mqi, [mqi/0, mqi/1, mqi_stop/1]).
 
 % To generate docs:
 % - Open SWI Prolog
@@ -110,11 +110,11 @@ The messages the server responds to are described below. A few things are true f
 ### Language Server Message Format {#language-server-message-format}
 Every language server message is a single valid Prolog term. Those that run queries have an argument which represents the query as a single term. To run several goals at once use `(goal1, goal2, ...)` as the goal term.
 
-The format of sent and received messages is identical (`\n` stands for the ASCII newline character which is a single byte): 
+The format of sent and received messages is identical (`\n` stands for the ASCII newline character which is a single byte):
 ~~~
-<stringByteLength>.\n<stringBytes>.\n. 
+<stringByteLength>.\n<stringBytes>.\n.
 ~~~
-For example, to send `hello` as a message you would send this: 
+For example, to send `hello` as a message you would send this:
 ~~~
 7.\nhello.\n
 ~~~
@@ -201,8 +201,8 @@ Response:
 | `exception(connection_failed)` | The connection has been unexpectedly shut down. The server will no longer be listening after this exception. |
 
 
-- async_result(Timeout) 
-Get results from a query that was started via a `run_async` message. Used to get results for all cases: if the query terminates normally, is cancelled by sending a `cancel_async` message, or times out. 
+- async_result(Timeout)
+Get results from a query that was started via a `run_async` message. Used to get results for all cases: if the query terminates normally, is cancelled by sending a `cancel_async` message, or times out.
 
 Each response to an `async_result` message responds with one result and, when there are no more results, responds with `exception(no_more_results)` or whatever exception stopped the query. Receiving any `exception` response except `exception(result_not_available)` means there are no more results. If `run_async` was run with `Find_All == false`, multiple `async_result` messages may be required before receiving the final exception.
 
@@ -362,7 +362,7 @@ quit(_) :-
     thread_send_message(main, quit_mqi).
 
 
-%! stop_mqi(+Server_Thread_ID:atom) is det.
+%! mqi_stop(+Server_Thread_ID:atom) is det.
 %
 % If `Server_Thread_ID` is a variable, stops all language servers and associated threads.  If `Server_Thread_ID` is an atom, then only the server with that `Server_Thread_ID` is stopped. `Server_Thread_ID` can be provided or retrieved using `Options` in `mqi/1`.
 %
@@ -372,7 +372,7 @@ quit(_) :-
 % Closes down any pending connections using abort even if there were no matching server threads since the server thread could have died.
 % At this point only threads associated with live connections (or potentially a goal thread that hasn't detected its missing communication thread)
 % should be left so seeing abort warning messages in the console seems OK
-stop_mqi(Server_Thread_ID) :-
+mqi_stop(Server_Thread_ID) :-
     % First shut down any matching servers to stop new connections
     forall(retract(mqi_thread(Server_Thread_ID, _, Socket)),
         (

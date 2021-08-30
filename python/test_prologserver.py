@@ -629,7 +629,7 @@ class TestPrologServer(ParametrizedTestCase):
                     with newServer.create_thread() as prologThread:
                         result = prologThread.query("true")
                         self.assertEqual(result, True)
-                result = monitorThread.query("stop_mqi({})".format(serverThreadID))
+                result = monitorThread.query("mqi_stop({})".format(serverThreadID))
                 self.assertEqual(result, True)
                 afterShutdownThreads = self.thread_list(monitorThread)
                 self.assertEqual(afterShutdownThreads, initialThreads)
@@ -644,7 +644,7 @@ class TestPrologServer(ParametrizedTestCase):
                         with newServer.create_thread() as prologThread:
                             result = prologThread.query("true")
                             self.assertEqual(result, True)
-                    result = monitorThread.query("stop_mqi({})".format(serverThreadID))
+                    result = monitorThread.query("mqi_stop({})".format(serverThreadID))
                     self.assertEqual(result, True)
                     afterShutdownThreads = self.thread_list(monitorThread)
                     self.assertEqual(afterShutdownThreads, initialThreads)
@@ -658,7 +658,7 @@ class TestPrologServer(ParametrizedTestCase):
                         with newServer.create_thread() as prologThread:
                             result = prologThread.query("true")
                             self.assertEqual(result, True)
-                    result = monitorThread.query("stop_mqi({})".format(serverThreadID))
+                    result = monitorThread.query("mqi_stop({})".format(serverThreadID))
                     self.assertEqual(result, True)
                     afterShutdownThreads = self.thread_list(monitorThread)
                     self.assertEqual(afterShutdownThreads, initialThreads)
@@ -698,7 +698,7 @@ class TestPrologServer(ParametrizedTestCase):
 
                     # Now shut it down by cancelling the query and running stop
                     blockedThread.cancel_query_async()
-                    result = monitorThread.query("stop_mqi({})".format(blockedThread.communication_thread_id))
+                    result = monitorThread.query("mqi_stop({})".format(blockedThread.communication_thread_id))
                     self.assertEqual(result, True)
 
                 # And make sure all the threads went away
@@ -745,8 +745,8 @@ class TestPrologServer(ParametrizedTestCase):
                 # Only a server thread should have been started
                 assert len(testThreads) - len(initialThreads) == 1
 
-                # stop_mqi should remove all (and only) created threads and the Unix Domain File (which is tested on self.tearDown())
-                result = monitorThread.query("stop_mqi({})".format(optionsDict["ServerThreadID"]))
+                # mqi_stop should remove all (and only) created threads and the Unix Domain File (which is tested on self.tearDown())
+                result = monitorThread.query("mqi_stop({})".format(optionsDict["ServerThreadID"]))
                 sleep(2)
                 afterShutdownThreads = self.thread_list(monitorThread)
                 self.assertEqual(afterShutdownThreads, initialThreads)
@@ -761,7 +761,7 @@ class TestPrologServer(ParametrizedTestCase):
                     with newServer.create_thread() as prologThread:
                         self.sync_query_timeout(prologThread, sleepForSeconds=2, queryTimeout=None)
                         self.async_query_timeout(prologThread, sleepForSeconds=2, queryTimeout=None)
-                result = monitorThread.query("stop_mqi({})".format(serverThreadID))
+                result = monitorThread.query("mqi_stop({})".format(serverThreadID))
                 self.assertEqual(result, True)
                 afterShutdownThreads = self.thread_list(monitorThread)
                 self.assertEqual(afterShutdownThreads, initialThreads)
@@ -776,7 +776,7 @@ class TestPrologServer(ParametrizedTestCase):
                         prologThread.query_async("sleep(20)")
                 # Wait for query to start running
                 sleep(2)
-                result = monitorThread.query("stop_mqi({})".format(serverThreadID))
+                result = monitorThread.query("mqi_stop({})".format(serverThreadID))
                 assert result is True
                 afterShutdownThreads = self.thread_list(monitorThread)
                 self.assertEqual(afterShutdownThreads, initialThreads)
