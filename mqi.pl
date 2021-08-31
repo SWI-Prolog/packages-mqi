@@ -1,10 +1,3 @@
-:- module(mqi, [mqi_start/0, mqi_start/1, mqi_stop/1]).
-
-% To generate docs:
-% - Open SWI Prolog
-% - consult("/.../swiplserver/swiplserver/mqi.pl")
-% - doc_save("/.../swiplserver/swiplserver/mqi.pl", [doc_root("/.../swiplserver/docs/mqi")]).
-
 /*  Prolog Machine Query Interface
     Author:        Eric Zinda
     E-mail:        ericz@inductorsoftware.com
@@ -38,6 +31,12 @@
     POSSIBILITY OF SUCH DAMAGE.
 */
 
+:- module(mqi,
+          [ mqi_start/0,
+            mqi_start/1,                % +Options
+            mqi_stop/1                  % ?Thread
+          ]).
+
 /**
   mqi_start(+Options:list) is semidet.
 
@@ -50,7 +49,8 @@ For debugging, the server outputs traces using the `debug/3` predicate so that t
 - `debug(mqi(protocol))`: Traces protocol messages to show the flow of commands and connections.  It is designed to avoid filling the screen with large queries and results to make it easier to read.
 - `debug(mqi(query))`: Traces messages that involve each query and its results. Therefore it can be quite verbose depending on the query.
 
-## Options {#mqi-options}
+__Options__
+
 Options is a list containing any combination of the following options. When used in the Prolog top level (i.e. in [Standalone Mode](#mqi-standalone-mode)), these are specified as normal Prolog options like this:
 ~~~
 mqi_start([unix_domain_socket(Socket), password('a password')])
@@ -103,154 +103,6 @@ Determines whether the server writes the port (or generated Unix Domain Socket) 
 
 - write_output_to_file(+File)
 Redirects STDOUT and STDERR to the file path specified.  Useful for debugging the MQI when it is being used in ["Embedded Mode"](#mqi-embedded-mode). If using multiple MQI instances in one SWI Prolog instance, only set this on the first one.  Each time it is set the output will be redirected.
-
-## Machine Query Interface Messages {#mqi-messages}
-The messages the Machine Query Interface responds to are described below. A few things are true for all of them:
-
-- Every connection is in its own separate thread. Opening more than one connection means the code is running concurrently.
-- Closing the socket without sending `close` and waiting for a response will halt the process if running in ["Embedded Mode"](#mqi-embedded-mode). This is so that stopping a debugger doesn't leave the process orphaned.
-- All messages are request/response messages. After sending, there will be exactly one response from the MQI.
-- Timeout in all of the commands is in seconds. Sending a variable (e.g. `_`) will use the default timeout passed to the initial `mqi_start/1` predicate and `-1` means no timeout.
-- All queries are run in the default module context of `user`. `module/1` has no effect.
-
-### Machine Query Interface Message Format {#mqi-message-format}
-Every Machine Query Interface message is a single valid Prolog term. Those that run queries have an argument which represents the query as a single term. To run several goals at once use `(goal1, goal2, ...)` as the goal term.
-
-The format of sent and received messages is identical (`\n` stands for the ASCII newline character which is a single byte):
-~~~
-<stringByteLength>.\n<stringBytes>.\n.
-~~~
-For example, to send `hello` as a message you would send this:
-~~~
-7.\nhello.\n
-~~~
- - =|<stringByteLength>|= is the number of bytes of the string to follow (including the =|.\n|=), in human readable numbers, such as `15` for a 15 byte string. It must be followed by =|.\n|=.
- - =|<stringBytes>|= is the actual message string being sent, such as =|run(atom(a), -1).\n|=. It must always end with =|.\n|=. The character encoding used to decode and encode the string is UTF-8.
-
-To send a message to the MQI, send a message using the message format above to the localhost port or Unix Domain Socket that the MQI is listening on.  For example, to run the synchronous goal `atom(a)`, send the following message:
-~~~
-18.\nrun(atom(a), -1).\n<end of stream>
-~~~
-You will receive the response below on the receive stream of the same connection you sent on. Note that the answer is in JSON format. If a message takes longer than 2 seconds, there will be "heartbeat" characters (".") at the beginning of the response message, approximately 1 every 2 seconds. So, if the query takes 6 seconds for some reason, there will be three "." characters first:
-~~~
-...12\ntrue([[]]).\n
-~~~
-
-### Machine Query Interface Messages Reference {#mqi-messages}
-
-The full list of Machine Query Interface messages is described below:
-
-
-- run(Goal, Timeout)
-
-Runs `Goal` on the connection's designated query thread. Stops accepting new commands until the query is finished and it has responded with the results.  If a previous query is still in progress, waits until the previous query finishes (discarding that query's results) before beginning the new query.
-
-Timeout is in seconds and indicates a timeout for generating all results for the query. Sending a variable (e.g. `_`) will use the default timeout passed to the initial `mqi_start/1` predicate and `-1` means no timeout.
-
-While it is waiting for the query to complete, sends a "." character *not* in message format, just as a single character, once every two seconds to proactively ensure that the client is alive. Those should be read and discarded by the client.
-
-If a communication failure happens (during a heartbeat or otherwise), the connection is terminated, the query is aborted and (if running in ["Embedded Mode"](#mqi-embedded-mode)) the SWI Prolog process shuts down.
-
-When completed, sends a response message using the normal message format indicating the result.
-
-Response:
-
-|`true([Answer1, Answer2, ... ])` | The goal succeeded at least once. The response always includes all answers as if run with findall() (see run_async/3 below to get individual results back iteratively).  Each `Answer` is a list of the assignments of free variables in the answer. If there are no free variables, `Answer` is an empty list. |
-|`false` | The goal failed. |
-|`exception(time_limit_exceeded)` | The query timed out. |
-|`exception(Exception)` | An arbitrary exception was not caught while running the goal. |
-|`exception(connection_failed)` | The query thread unexpectedly exited. The MQI will no longer be listening after this exception. |
-
-- run_async(Goal, Timeout, Find_All)
-
-Starts a Prolog query specified by `Goal` on the connection's designated query thread. Answers to the query, including exceptions, are retrieved afterwards by sending the `async_result` message (described below). The query can be cancelled by sending the `cancel_async` message. If a previous query is still in progress, waits until that query finishes (discarding that query's results) before responding.
-
-Timeout is in seconds and indicates a timeout for generating all results for the query. Sending a variable (e.g. `_`) will use the default timeout passed to the initial `mqi_start/1` predicate and `-1` means no timeout.
-
-If the socket closes before a response is sent, the connection is terminated, the query is aborted and (if running in ["Embedded Mode"](#mqi-embedded-mode)) the SWI Prolog process shuts down.
-
-If it needs to wait for the previous query to complete, it will send heartbeat messages (see ["Machine Query Interface Message Format"](#mqi-message-format)) while it waits.  After it responds, however, it does not send more heartbeats. This is so that it can begin accepting new commands immediately after responding so the client.
-
-`Find_All == true` means generate one response to an `async_result` message with all of the answers to the query (as in the `run` message above). `Find_All == false` generates a single response to an  `async_result` message per answer.
-
-Response:
-
-|`true([[]])` | The goal was successfully parsed. |
-|`exception(Exception)` | An error occurred parsing the goal. |
-|`exception(connection_failed)` | The goal thread unexpectedly shut down. The MQI will no longer be listening after this exception. |
-
-
-- cancel_async
-Attempt to cancel a query started by the `run_async` message in a way that allows further queries to be run on this Prolog thread afterwards.
-
-If there is a goal running, injects a `throw(cancel_goal)` into the executing goal to attempt to stop the goal's execution. Begins accepting new commands immediately after responding. Does not inject `abort/0` because this would kill the connection's designated thread and the system is designed to maintain thread local data for the client. This does mean it is a "best effort" cancel since the exception can be caught.
-
-`cancel_async` is guaranteed to either respond with an exception (if there is no query or pending results from the last query), or safely attempt to stop the last executed query even if it has already finished.
-
-To guarantee that a query is cancelled, send `close` and close the socket.
-
-It is not necessary to determine the outcome of `cancel_async` after sending it and receiving a response. Further queries can be immediately run. They will start after the current query stops.
-
-However, if you do need to determine the outcome or determine when the query stops, send `async_result`. Using `Timeout = 0` is recommended since the query might have caught the exception or still be running.  Sending `async_result` will find out the "natural" result of the goal's execution. The "natural" result depends on the particulars of what the code actually did. The response could be:
-
-|`exception(cancel_goal)` | The query was running and did not catch the exception. I.e. the goal was successfully cancelled. |
-|`exception(time_limit_exceeded)` | The query timed out before getting cancelled. |
-|`exception(Exception)` | They query hits another exception before it has a chance to be cancelled. |
-| A valid answer | The query finished before being cancelled. |
-
-Note that you will need to continue sending `async_result` until you receive an `exception(Exception)` message if you want to be sure the query is finished (see documentation for `async_result`).
-
-Response:
-
-| `true([[]])` | There is a query running or there are pending results for the last query. |
-| `exception(no_query)` | There is no query or pending results from a query to cancel. |
-| `exception(connection_failed)` | The connection has been unexpectedly shut down. The MQI will no longer be listening after this exception. |
-
-
-- async_result(Timeout)
-Get results from a query that was started via a `run_async` message. Used to get results for all cases: if the query terminates normally, is cancelled by sending a `cancel_async` message, or times out.
-
-Each response to an `async_result` message responds with one result and, when there are no more results, responds with `exception(no_more_results)` or whatever exception stopped the query. Receiving any `exception` response except `exception(result_not_available)` means there are no more results. If `run_async` was run with `Find_All == false`, multiple `async_result` messages may be required before receiving the final exception.
-
-Waits `Timeout` seconds for a result. `Timeout == -1` or sending a variable for Timeout indicates no timeout. If the timeout is exceeded and no results are ready, sends `exception(result_not_available)`.
-
-Some examples:
-
-|If the query succeeds with N answers...                             | `async_result` messages 1 to N will receive each answer, in order,  and `async_result` message N+1 will receive `exception(no_more_results)` |
-|If the query fails (i.e. has no answers)...                         | `async_result` message 1 will receive `false` and `async_result` message 2 will receive `exception(no_more_results)` |
-|If the query times out after one answer...                          | `async_result` message 1 will receive the first answer and `async_result` message 2 will receive `exception(time_limit_exceeded)` |
-|If the query is cancelled after it had a chance to get 3 answers... | `async_result` messages 1 to 3 will receive each answer, in order,  and `async_result` message 4 will receive `exception(cancel_goal)` |
-|If the query throws an exception before returning any results...    | `async_result` message 1 will receive `exception(Exception)`|
-
-Note that, after sending `cancel_async`, calling `async_result` will return the "natural" result of the goal's execution. The "natural" result depends on the particulars of what the code actually did since this is multi-threaded and there are race conditions. This is described more below in the response section and above in `cancel_async`.
-
-Response:
-
-|`true([Answer1, Answer2, ... ])` | The next answer from the query is a successful answer. Whether there are more than one `Answer` in the response depends on the `findall` setting. Each `Answer` is a list of the assignments of free variables in the answer. If there are no free variables, `Answer` is an empty list.|
-|`false`| The query failed with no answers.|
-|`exception(no_query)` | There is no query in progress.|
-|`exception(result_not_available)` | There is a running query and no results were available in `Timeout` seconds.|
-|`exception(no_more_results)` | There are no more answers and no other exception occurred. |
-|`exception(cancel_goal)`| The next answer is an exception caused by `cancel_async`. Indicates no more answers. |
-|`exception(time_limit_exceeded)`| The query timed out generating the next answer (possibly in a race condition before getting cancelled).  Indicates no more answers. |
-|`exception(Exception)`| The next answer is an arbitrary exception. This can happen after `cancel_async` if the `cancel_async` exception is caught or the code hits another exception first.  Indicates no more answers. |
-|`exception(connection_failed)`| The goal thread unexpectedly exited. The MQI will no longer be listening after this exception.|
-
-
-- close
-Closes a connection cleanly, indicating that the subsequent socket close is not a connection failure. Thus it doesn't shutdown the MQI in ["Embedded Mode"](#mqi-embedded-mode).  The response must be processed by the client before closing the socket or it will be interpreted as a connection failure.
-
-Any asynchronous query that is still running will be halted by using `abort/0` in the connection's query thread.
-
-Response:
-`true([[]])`
-
-
-- quit
-Stops the MQI and ends the SWI Prolog process. This allows client language libraries to ask for an orderly shutdown of the Prolog process.
-
-Response:
-`true([[]])`
 
 */
 :- use_module(library(socket)).
@@ -368,7 +220,7 @@ quit(_) :-
     thread_send_message(main, quit_mqi).
 
 
-%! mqi_stop(+Server_Thread_ID:atom) is det.
+%! mqi_stop(?Server_Thread_ID:atom) is det.
 %
 % If `Server_Thread_ID` is a variable, stops all Machine Query Interfaces and associated threads.  If `Server_Thread_ID` is an atom, then only the MQI with that `Server_Thread_ID` is stopped. `Server_Thread_ID` can be provided or retrieved using `Options` in `mqi_start/1`.
 %
