@@ -78,11 +78,11 @@ The basic rule to remember is: any predicates designed to interact with or chang
 The most common way to use the Machine Query Interface is to find a library that wraps and exposes it as a native part of another programming language such as the [Python =|swiplserver|= library](#mqi-python-installation). This section describes how to build one if there isn't yet a library for your language.  To do this, you'll need to familiarize yourself with the MQI protocol as described in the `mqi/1` documentation. However, to give an idea of the scope of work required, below is a typical interaction done (invisibly to the user) in the implementation of any programming language library:
 
 
-     1. Launch the SWI Prolog process using (along with any other options the user requests): =|swipl --quiet -g mqi -t halt -- --write_connection_values=true|=.  To work, the `swipl` Prolog executable will need to be on the path or specified in the command. This launches SWI Prolog, starts the MQI, and writes the chosen port and password to STDOUT.  This way of launching invokes the mqi/0 predicate that turns off the `int` (i.e. Interrupt/SIGINT) signal to Prolog. This is because some languages (such as Python) use that signal during debugging and it would be otherwise passed to the client Prolog process and switch it into the debugger.  See the mqi/0 predicate for more information on other command line options.
+     1. Launch the SWI Prolog process using (along with any other options the user requests): =|swipl --quiet -g mqi_start -t halt -- --write_connection_values=true|=.  To work, the `swipl` Prolog executable will need to be on the path or specified in the command. This launches SWI Prolog, starts the MQI, and writes the chosen port and password to STDOUT.  This way of launching invokes the mqi/0 predicate that turns off the `int` (i.e. Interrupt/SIGINT) signal to Prolog. This is because some languages (such as Python) use that signal during debugging and it would be otherwise passed to the client Prolog process and switch it into the debugger.  See the mqi/0 predicate for more information on other command line options.
      2. Read the SWI Prolog STDOUT to retrieve the TCP/IP port and password. They are sent in that order, delimited by '\n'.
 
 ~~~
-$ swipl --quiet -g mqi -t halt -- --write_connection_values=true
+$ swipl --quiet -g mqi_start -t halt -- --write_connection_values=true
 54501
 185786669688147744015809740744888120144
 ~~~
@@ -197,12 +197,12 @@ As the MQI is a multithreaded application, debugging the running code requires u
 In Python this would look like:
 ~~~
 % From the SWI Prolog top level
-?- tdebug, mqi([port(4242), password(debugnow)]).
+?- tdebug, mqi_start([port(4242), password(debugnow)]).
 % The graphical front-end will be used for subsequent tracing
 true.
 ~~~
 ~~~
-# Python using the swiplserver library
+# Python using the swiplserver library {#mqi-library}
 from swiplserver import PrologServer, PrologThread
 
 with PrologServer(4242, "debugnow") as server:

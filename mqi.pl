@@ -1,4 +1,4 @@
-:- module(mqi, [mqi/0, mqi/1, mqi_stop/1]).
+:- module(mqi, [mqi_start/0, mqi_start/1, mqi_stop/1]).
 
 % To generate docs:
 % - Open SWI Prolog
@@ -57,9 +57,12 @@ mqi([unix_domain_socket(Socket), password('a password')])
 ~~~
 When using ["Embedded Mode"](#mqi-embedded-mode) they are passed using the same name but as normal command line arguments like this:
 ~~~
-swipl --quiet -g mqi -t halt -- --write_connection_values=true --password="a password" --create_unix_domain_socket=true
-~~~
-Note the use of quotes around values that could confuse command line processing like spaces (e.g. "a password") and that `unix_domain_socket(Variable)` is written as =|--create_unix_domain_socket=true|= on the command line. See below for more information.
+swipl --quiet -g mqi_start -t halt -- --write_connection_values=true
+--password="a password" --create_unix_domain_socket=true ~~~ Note the
+use of quotes around values that could confuse command line processing
+like spaces (e.g. "a password") and that `unix_domain_socket(Variable)`
+is written as =|--create_unix_domain_socket=true|= on the command line.
+See below for more information.
 
 - port(?Port)
 The TCP/IP port to bind to on localhost. This option is ignored if the `unix_domain_socket/1` option is set. Port is either a legal TCP/IP port number (integer) or a variable term like `Port`. If it is a variable, it causes the system to select a free port and unify the variable with the selected port as in `tcp_bind/2`. If the option `write_connection_values(true)` is set, the selected port is output to STDOUT followed by `\n` on startup to allow the client language library to retrieve it in ["Embedded Mode"](#mqi-embedded-mode).
@@ -272,7 +275,7 @@ Response:
 % Password is carefully constructed to be a string (not an atom) so that it is not
 % globally visible
 % Add ".\n" to the password since it will be added by the message when received
-mqi(Options) :-
+mqi_start(Options) :-
     Encoding = utf8,
     option(pending_connections(Connection_Count), Options, 5),
     option(query_timeout(Query_Timeout), Options, -1),
@@ -314,13 +317,13 @@ mqi(Options) :-
     start_server_thread(Run_Server_On_Thread, Server_Thread_ID, Server_Goal, Unix_Domain_Socket_Path, Unix_Domain_Socket_Path_And_File).
 
 
-%! mqi is semidet.
+%! mqi_start is semidet.
 %Main entry point for running the Machine Query Interface in ["Embedded Mode"](#mqi-embedded-mode) and designed to be called from the command line. Embedded Mode is used when launching the Machine Query Interface as an embedded part of another language (e.g. Python). Calling mqi/0 from Prolog interactively is not recommended as it depends on Prolog exiting to stop the MQI, instead use mqi/1 for interactive use.
 %
 %To launch embedded mode:
 %
 %~~~
-%swipl --quiet -g mqi -t halt -- --write_connection_values=true
+%swipl --quiet -g mqi_start -t halt -- --write_connection_values=true
 %~~~
 %
 %This will start SWI Prolog and invoke the mqi/0 predicate and exit the process when that predicate stops. Any command line arguments after the standalone `--` will be passed as Options. These are the same Options that mqi/1 accepts and are passed to it directly. Some options are expressed differently due to command line limitations, see mqi/1 Options for more information.
@@ -328,8 +331,8 @@ mqi(Options) :-
 %Any Option values that causes issues during command line parsing (such as spaces) should be passed with =|""|= like this:
 %
 %~~~
-%swipl --quiet -g mqi -t halt -- --write_connection_values=true --password="HGJ SOWLWW WNDSJD"
-%~~~
+% swipl --quiet -g mqi_start -t halt -- --write_connection_values=true
+% --password="HGJ SOWLWW WNDSJD" ~~~
 
 
 % Turn off int signal when running in embedded mode so the client language
@@ -339,7 +342,7 @@ mqi(Options) :-
 % create_unix_domain_socket=true/false is only used as a command line argument
 % since it doesn't seem possible to pass create_unix_domain_socket=_ on the command line
 % and have it interpreted as a variable.
-mqi :-
+mqi_start :-
     current_prolog_flag(os_argv, Argv),
     argv_options(Argv, _Args, Options),
     append(Options, [exit_main_on_failure(true)], Options1),
@@ -353,7 +356,7 @@ mqi :-
     ->  true
     ;   throw(domain_error(cannot_be_set_in_embedded_mode, run_server_on_thread))
     ),
-    mqi(FinalOptions),
+    mqi_start(FinalOptions),
     on_signal(int, _, quit),
     thread_get_message(quit_mqi).
 

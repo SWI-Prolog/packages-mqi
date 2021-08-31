@@ -15,14 +15,14 @@ Allows using SWI Prolog as an embedded part of an application, "like a library".
 
 `swiplserver` provides:
 
- - The `PrologMQI` class that automatically manages starting and stopping a SWI Prolog instance and starts the Machine Query Interface ('MQI') using the `mqi/1` predicate to allow running Prolog queries.
+ - The `PrologMQI` class that automatically manages starting and stopping a SWI Prolog instance and starts the Machine Query Interface ('MQI') using the `mqi_start/1` predicate to allow running Prolog queries.
  - The `PrologThread` class is used to run queries on the created process. Queries are run exactly as they would be if you were interacting with the SWI Prolog "top level" (i.e. the Prolog command line).
 
 Installation:
 
     1. Install SWI Prolog (www.swi-prolog.org) and ensure that "swipl" is on the system path.
     2. Either "pip install swiplserver" or copy the "swiplserver" library (the whole directory) from the "libs" directory of your SWI Prolog installation to be a subdirectory of your Python project.
-    3. Check if your SWI Prolog version includes the Machine Query Interface by launching it and typing `?- mqi([]).` If it can't find it, see below for how to install it.
+    3. Check if your SWI Prolog version includes the Machine Query Interface by launching it and typing `?- mqi_start([]).` If it can't find it, see below for how to install it.
 
     If your SWI Prolog doesn't yet include the Machine Query Interface:
 
@@ -102,7 +102,7 @@ Debugging:
 
     `swiplserver` normally launches SWI Prolog and starts the Machine Query Interface so that it can connect and run queries. To debug your code using Prolog itself, you can do this manually and connect your application to it. A typical flow for standalone mode is:
 
-    1. Launch SWI Prolog and call the `mqi/1` predicate, specifying a port and password (documentation is [here]( https://blog.inductorsoftware.com/swiplserver/mqi/mqi.html)). Use the `tdebug/0` predicate to set all threads to debugging mode like this: `tdebug, mqi([port(4242), password(debugnow)])`.
+    1. Launch SWI Prolog and call the `mqi_start/1` predicate, specifying a port and password (documentation is [here]( https://blog.inductorsoftware.com/swiplserver/mqi/mqi.html)). Use the `tdebug/0` predicate to set all threads to debugging mode like this: `tdebug, mqi_start([port(4242), password(debugnow)])`.
     2. Optionally run the predicate `debug(mqi(_)).` in Prolog to turn on tracing for the Machine Query Interface.
     3. Set the selected port and password when you call `PrologMQI.__init__()`.
     4. Launch the application and go through the steps to reproduce the issue.
@@ -235,7 +235,7 @@ class PrologMQI:
 
         All arguments are optional and the defaults are set to the recommended settings that work best on all platforms during development. In production on Unix systems, consider using unix_domain_socket to further decrease security attack surface area.
 
-        For debugging scenarios, SWI Prolog can be launched manually and this class can be configured to (locally) connect to it using launch_mqi = False. This allows for inspection of the Prolog state and usage of the SWI Prolog debugging tools while your application is running. See the documentation for the Prolog `mqi/1` predicate for more information on how to run the Machine Query Interface in "Standalone Mode".
+        For debugging scenarios, SWI Prolog can be launched manually and this class can be configured to (locally) connect to it using launch_mqi = False. This allows for inspection of the Prolog state and usage of the SWI Prolog debugging tools while your application is running. See the documentation for the Prolog `mqi_start/1` predicate for more information on how to run the Machine Query Interface in "Standalone Mode".
 
         Examples:
             To automatically launch a SWI Prolog process using TCP/IP localhost and an automatically chosen port and password (the default):
@@ -243,7 +243,7 @@ class PrologMQI:
                 with PrologMQI() as mqi:
                     # your code here
 
-            To connect to an existing SWI Prolog process that has already started the `mqi/1` predicate and is using an automatically generated Unix Domain Socket and a password of '8UIDSSDXLPOI':
+            To connect to an existing SWI Prolog process that has already started the `mqi_start/1` predicate and is using an automatically generated Unix Domain Socket and a password of '8UIDSSDXLPOI':
 
                 with PrologMQI(launch_mqi = False,
                                   unix_domain_socket = '',
@@ -251,17 +251,17 @@ class PrologMQI:
                     # your code here
 
         Args:
-            launch_mqi: True (default) launch a SWI Prolog process on `PrologMQI.start()` and shut it down automatically on `PrologMQI.stop()` (or after a resource manager like the Python "with" statement exits). False connects to an existing SWI Prolog process that is running the `mqi/1` predicate (i.e. "Standalone Mode"). When False, `password` and one of `port` or `unix_domain_socket` must be specified to match the options provided to `mqi/1` in the separate SWI Prolog process.
+            launch_mqi: True (default) launch a SWI Prolog process on `PrologMQI.start()` and shut it down automatically on `PrologMQI.stop()` (or after a resource manager like the Python "with" statement exits). False connects to an existing SWI Prolog process that is running the `mqi_start/1` predicate (i.e. "Standalone Mode"). When False, `password` and one of `port` or `unix_domain_socket` must be specified to match the options provided to `mqi_start/1` in the separate SWI Prolog process.
 
             port: The TCP/IP localhost port to use for communication with the SWI Prolog process. Ignored if `unix_domain_socket` is not None.
 
                 - When `launch_mqi` is True, None (default) automatically picks an open port that the Machine Query Interface and this class both use.
-                - When `launch_mqi` is False, must be set to match the port specified in `mqi/1` of the running SWI Prolog process.
+                - When `launch_mqi` is False, must be set to match the port specified in `mqi_start/1` of the running SWI Prolog process.
 
             password: The password to use for connecting to the SWI Prolog process. This is to prevent malicious users from connecting to the Machine Query Interface since it can run arbitrary code.  Allowing the MQI to generate a strong password by using None is recommended.
 
                 - When `launch_mqi` is True, None (default) automatically generates a strong password using a uuid. Other values specify the password to use.
-                - When `launch_mqi` is False, must be set to match the password specified in `mqi/1` of the running SWI Prolog process.
+                - When `launch_mqi` is False, must be set to match the password specified in `mqi_start/1` of the running SWI Prolog process.
 
             unix_domain_socket: None (default) use localhost TCP/IP for communication with the SWI Prolog process. Otherwise (only on Unix) is either a fully qualified path and filename of the Unix Domain Socket to use or an empty string (recommended). An empty string will cause a temporary directory to be created using Prolog's `tmp_file/2` and a socket file will be created within that directory following the below requirements.  If the directory and file are unable to be created for some reason, `PrologMQI.start()` with raise an exception. Specifying a file to use should follow the same guidelines as the generated file:
 
@@ -381,7 +381,7 @@ class PrologMQI:
                 + [
                     "--quiet",
                     "-g",
-                    "mqi",
+                    "mqi_start",
                     "-t",
                     "halt",
                     "--",

@@ -826,7 +826,7 @@ class TestPrologMQI(ParametrizedTestCase):
 
                 # password() should be used if supplied.
                 result = monitorThread.query(
-                    "mqi([port(Port), password(testpassword), server_thread(ServerThreadID)])"
+                    "mqi_start([port(Port), password(testpassword), server_thread(ServerThreadID)])"
                 )
                 serverThreadID = result[0]["ServerThreadID"]
                 port = result[0]["Port"]
@@ -849,7 +849,7 @@ class TestPrologMQI(ParametrizedTestCase):
                     socketPath = mkdtemp()
                     unixDomainSocket = PrologMQI.unix_domain_socket_file(socketPath)
                     result = monitorThread.query(
-                        f"mqi([unix_domain_socket('{unixDomainSocket}'), password(testpassword), server_thread(ServerThreadID)])"
+                        f"mqi_start([unix_domain_socket('{unixDomainSocket}'), password(testpassword), server_thread(ServerThreadID)])"
                     )
                     serverThreadID = result[0]["ServerThreadID"]
                     with PrologMQI(
@@ -871,7 +871,7 @@ class TestPrologMQI(ParametrizedTestCase):
 
                     # unixDomainSocket() should be generated if asked for (non-windows).
                     result = monitorThread.query(
-                        "mqi([unix_domain_socket(Socket), password(testpassword), server_thread(ServerThreadID)])"
+                        "mqi_start([unix_domain_socket(Socket), password(testpassword), server_thread(ServerThreadID)])"
                     )
                     serverThreadID = result[0]["ServerThreadID"]
                     unixDomainSocket = result[0]["Socket"]
@@ -899,7 +899,7 @@ class TestPrologMQI(ParametrizedTestCase):
                 # Create a new connection that we block starting a new server
                 with server.create_thread() as blockedThread:
                     blockedThread.query_async(
-                        "mqi([port({}), password(testpassword), run_server_on_thread(false), server_thread(testServerThread)])".format(
+                        "mqi_start([port({}), password(testpassword), run_server_on_thread(false), server_thread(testServerThread)])".format(
                             socketPort
                         )
                     )
@@ -975,7 +975,7 @@ class TestPrologMQI(ParametrizedTestCase):
                 # Launch the new server with appropriate options specified with variables to make sure they get filled in
                 if os.name == "nt":
                     result = monitorThread.query(
-                        "mqi([port(Port), server_thread(ServerThreadID), password(Password)])"
+                        "mqi_start([port(Port), server_thread(ServerThreadID), password(Password)])"
                     )
                     optionsDict = result[0]
                     assert (
@@ -985,7 +985,7 @@ class TestPrologMQI(ParametrizedTestCase):
                     )
                 else:
                     result = monitorThread.query(
-                        "mqi([port(Port), server_thread(ServerThreadID), password(Password), unix_domain_socket(Unix)])"
+                        "mqi_start([port(Port), server_thread(ServerThreadID), password(Password), unix_domain_socket(Unix)])"
                     )
                     optionsDict = result[0]
                     assert (
@@ -1015,7 +1015,7 @@ class TestPrologMQI(ParametrizedTestCase):
                 # queryTimeout() supplied at startup should apply to queries by default. password() and port() should be used if supplied.
                 socketPort = 4250
                 result = monitorThread.query(
-                    "mqi([query_timeout(1), port({}), password(testpassword), server_thread(ServerThreadID)])".format(
+                    "mqi_start([query_timeout(1), port({}), password(testpassword), server_thread(ServerThreadID)])".format(
                         socketPort
                     )
                 )
@@ -1040,7 +1040,7 @@ class TestPrologMQI(ParametrizedTestCase):
 
                 # Shutting down a server with an active query should abort it and close all threads properly.
                 result = monitorThread.query(
-                    "mqi([port({}), password(testpassword), server_thread(ServerThreadID)])".format(
+                    "mqi_start([port({}), password(testpassword), server_thread(ServerThreadID)])".format(
                         socketPort
                     )
                 )
