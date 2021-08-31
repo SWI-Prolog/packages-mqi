@@ -32,9 +32,9 @@ In general, to use the Machine Query Interface with any programming language:
     5. Install (or write!) the library you'll be using to access the MQI in your language of choice.
 
 If your SWI Prolog version doesn't yet include the MQI:
-    1. Download the =|mqi.pl|= file from the [GitHub repository](https://github.com/EricZinda/swiplserver/tree/main/mqi).
+    1. Download the =|mqi.pl|= file from the [GitHub repository](https://github.com/SWI-Prolog/packages-mqi/blob/master/mqi.pl).
     2. Open an operating system command prompt and go to the directory where you downloaded =|mqi.pl|=.
-    3. Run the command below. On Windows the command prompt must be [run as an administrator](https://www.wikihow.com/Run-Command-Prompt-As-an-Administrator-on-Windows). On Mac or Linux, start the command with `sudo` as in `sudo swipl -s ...`.
+    3. Run the command below. On Windows the command prompt must be [run as an administrator](https://www.wikihow.com/Run-Command-Prompt-As-an-Administrator-on-Windows). On Mac or Linux, start the command with `sudo` as in ``sudo swipl -s ...``.
 
 ~~~
 swipl -s mqi.pl -g "mqi:install_to_library('mqi.pl')" -t halt
@@ -42,7 +42,7 @@ swipl -s mqi.pl -g "mqi:install_to_library('mqi.pl')" -t halt
 
 ## Prolog Language Differences from the Top Level {#mqi-toplevel-differences}
 
-The Machine Query Interface is designed to act like using the ["top level"](quickstart) prompt of SWI Prolog itself (i.e. the "?-" prompt).  If you've built the Prolog part of your application by loading code, running it and debugging it using the normal SWI Prolog top level, integrating it with your native language should be straightforward: simply run the commands you'd normally run on the top level, but now run them using the query APIs provided by the library built for your target language. Those APIs will allow you to send the exact same text to Prolog and they should execute the same way.  Here's an example using the Python =|swiplserver|= library:
+The Machine Query Interface is designed to act like using the ["top level"](quickstart) prompt of SWI Prolog itself (i.e. the "?-" prompt).  If you've built the Prolog part of your application by loading code, running it and debugging it using the normal SWI Prolog top level, integrating it with your native language should be straightforward: simply run the commands you'd normally run on the top level, but now run them using the query APIs provided by the library built for your target language. Those APIs will allow you to send the exact same text to Prolog and they should execute the same way.  Here's an example using the Python `swiplserver` library:
 
 ~~~
 % Prolog Top Level
@@ -68,7 +68,7 @@ third
 While the query functionality of the MQI does run on a thread, it will always be the *same* thread, and, if you use a single connection, it will only allow queries to be run one at a time, just like the top level. Of course, the queries you send can launch threads, just like the top level, so you are not limited to a single threaded application. There are a few differences from the top level, however:
 
     - Normally, the SWI Prolog top level runs all user code in the context of a built-in module called "user", as does the MQI. However, the top level allows this to be changed using the module/1 predicate. This predicate has no effect when sent to the MQI.
-    - Predefined streams like user_input/0 are initially bound to the standard operating system I/O streams (like STDIN) and, since the Prolog process is running invisibly, will obviously not work as expected. Those streams can be changed, however, by issuing commands using system predicates as defined in the SWI Prolog documentation.
+    - Predefined streams like `user_input` are initially bound to the standard operating system I/O streams (like STDIN) and, since the Prolog process is running invisibly, will obviously not work as expected. Those streams can be changed, however, by issuing commands using system predicates as defined in the SWI Prolog documentation.
     - Every connection to the MQI runs in its own thread, so opening two connections from an application means you are running multithreaded code.
 
 The basic rule to remember is: any predicates designed to interact with or change the default behavior of the top level itself probably won't have any effect.
@@ -78,7 +78,7 @@ The basic rule to remember is: any predicates designed to interact with or chang
 The most common way to use the Machine Query Interface is to find a library that wraps and exposes it as a native part of another programming language such as the [Python =|swiplserver|= library](#mqi-python-installation). This section describes how to build one if there isn't yet a library for your language.  To do this, you'll need to familiarize yourself with the MQI protocol as described in the `mqi_start/1` documentation. However, to give an idea of the scope of work required, below is a typical interaction done (invisibly to the user) in the implementation of any programming language library:
 
 
-     1. Launch the SWI Prolog process using (along with any other options the user requests): =|swipl --quiet -g mqi_start -t halt -- --write_connection_values=true|=.  To work, the `swipl` Prolog executable will need to be on the path or specified in the command. This launches SWI Prolog, starts the MQI, and writes the chosen port and password to STDOUT.  This way of launching invokes the mqi/0 predicate that turns off the `int` (i.e. Interrupt/SIGINT) signal to Prolog. This is because some languages (such as Python) use that signal during debugging and it would be otherwise passed to the client Prolog process and switch it into the debugger.  See the mqi/0 predicate for more information on other command line options.
+     1. Launch the SWI Prolog process using (along with any other options the user requests): =|swipl --quiet -g mqi_start -t halt -- --write_connection_values=true|=.  To work, the `swipl` Prolog executable will need to be on the path or specified in the command. This launches SWI Prolog, starts the MQI, and writes the chosen port and password to STDOUT.  This way of launching invokes the mqi_start/0 predicate that turns off the `int` (i.e. Interrupt/SIGINT) signal to Prolog. This is because some languages (such as Python) use that signal during debugging and it would be otherwise passed to the client Prolog process and switch it into the debugger.  See the mqi_start/0 predicate for more information on other command line options.
      2. Read the SWI Prolog STDOUT to retrieve the TCP/IP port and password. They are sent in that order, delimited by '\n'.
 
 ~~~
@@ -92,7 +92,7 @@ $ swipl --quiet -g mqi_start -t halt -- --write_connection_values=true
      3. Use the language's TCP/IP sockets library to open a socket on the specified port of localhost and send the password as a message. Messages to and from the MQI are in the form =|<stringByteLength>.\n<stringBytes>.\n |= where `stringByteLength` includes the =|.\n|= from the string. For example: =|7.\nhello.\n|= More information on the [message format](#mqi-message-format) is below.
      4. Listen on the socket for a response message of `true([[threads(Comm_Thread_ID, Goal_Thread_ID)]])` (which will be in JSON form) indicating successful creation of the connection.  `Comm_Thread_ID` and `Goal_Thread_ID` are the internal Prolog IDs of the two threads that are used for the connection. They are sent solely for monitoring and debugging purposes.
 
-We can try all of this using the Unix tool `netcat` (also available for Windows) to interactively connect to the MQI. In `netcat` hitting `enter` sends =|\n|= which is what the message format requires. The server responses are show indented inline.
+We can try all of this using the Unix tool `nc` (netcat) (also available for Windows) to interactively connect to the MQI. In `nc` hitting `enter` sends =|\n|= which is what the message format requires. The server responses are show indented inline.
 
 We'll use the port and password that were sent to STDOUT above:
 ~~~
@@ -122,7 +122,7 @@ $ nc 127.0.0.1 54501
      6. Shutting down the connection is accomplished by sending the message `close`, waiting for the response message of `true([[]])` (in JSON form), and then closing the socket using the socket API of the language.  If the socket is closed (or fails) before the `close` message is sent, the default behavior of the MQI is to exit the SWI Prolog process to avoid leaving the process around.  This is to support scenarios where the user is running and halting their language debugger without cleanly exiting.
      7. Shutting down the launched SWI Prolog process is accomplished by sending the `quit` message and waiting for the response message of `true([[]])` (in JSON form). This will cause an orderly shutdown and exit of the process.
 
-Continuing with the `netcat` session (the `quit` message isn't shown since the `close` message closes the connection):
+Continuing with the `nc` session (the `quit` message isn't shown since the `close` message closes the connection):
 ~~~
 18.
 run(atom(a), -1).
