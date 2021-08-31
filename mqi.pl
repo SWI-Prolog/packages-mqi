@@ -39,7 +39,7 @@
 */
 
 /**
-  mqi(+Options:list) is semidet.
+  mqi_start(+Options:list) is semidet.
 
 Starts a Prolog Machine Query Interface ('MQI') using Options. The MQI is normally started automatically by a library built for a particular programming language such as the [`swiplserver` Python library](#mqi-python-installation), but starting manually can be useful when debugging Prolog code in some scenarios. See the documentation on ["Standalone Mode"](#mqi-standalone-mode) for more information.
 
@@ -53,16 +53,19 @@ For debugging, the server outputs traces using the `debug/3` predicate so that t
 ## Options {#mqi-options}
 Options is a list containing any combination of the following options. When used in the Prolog top level (i.e. in [Standalone Mode](#mqi-standalone-mode)), these are specified as normal Prolog options like this:
 ~~~
-mqi([unix_domain_socket(Socket), password('a password')])
+mqi_start([unix_domain_socket(Socket), password('a password')])
 ~~~
 When using ["Embedded Mode"](#mqi-embedded-mode) they are passed using the same name but as normal command line arguments like this:
 ~~~
 swipl --quiet -g mqi_start -t halt -- --write_connection_values=true
---password="a password" --create_unix_domain_socket=true ~~~ Note the
-use of quotes around values that could confuse command line processing
-like spaces (e.g. "a password") and that `unix_domain_socket(Variable)`
-is written as =|--create_unix_domain_socket=true|= on the command line.
-See below for more information.
+--password="a password" --create_unix_domain_socket=true
+~~~
+
+Note the use of quotes around values that could confuse command line
+processing like spaces (e.g. "a password") and that
+`unix_domain_socket(Variable)` is written as
+=|--create_unix_domain_socket=true|= on the command line. See below for
+more information.
 
 - port(?Port)
 The TCP/IP port to bind to on localhost. This option is ignored if the `unix_domain_socket/1` option is set. Port is either a legal TCP/IP port number (integer) or a variable term like `Port`. If it is a variable, it causes the system to select a free port and unify the variable with the selected port as in `tcp_bind/2`. If the option `write_connection_values(true)` is set, the selected port is output to STDOUT followed by `\n` on startup to allow the client language library to retrieve it in ["Embedded Mode"](#mqi-embedded-mode).
@@ -70,7 +73,7 @@ The TCP/IP port to bind to on localhost. This option is ignored if the `unix_dom
 - unix_domain_socket(?Unix_Domain_Socket_Path_And_File)
 If set, Unix Domain Sockets will be used as the way to communicate with the server. `Unix_Domain_Socket_Path_And_File` specifies the fully qualified path and filename to use for the socket.
 
-To have one generated instead (recommended), pass `Unix_Domain_Socket_Path_And_File` as a variable when calling from the Prolog top level and the variable will be unified with a created filename. If launching in ["Embedded Mode"](#mqi-embedded-mode), instead pass =|--create_unix_domain_socket=true|= since there isn't a way to specify variables from the command line. When generating the file, a temporary directory will be created using `tmp_file/2` and a socket file will be created within that directory following the below requirements.  If the directory and file are unable to be created for some reason, mqi/1 fails.
+To have one generated instead (recommended), pass `Unix_Domain_Socket_Path_And_File` as a variable when calling from the Prolog top level and the variable will be unified with a created filename. If launching in ["Embedded Mode"](#mqi-embedded-mode), instead pass =|--create_unix_domain_socket=true|= since there isn't a way to specify variables from the command line. When generating the file, a temporary directory will be created using `tmp_file/2` and a socket file will be created within that directory following the below requirements.  If the directory and file are unable to be created for some reason, mqi_start/1 fails.
 
 Regardless of whether the file is specified or generated, if the option `write_connection_values(true)` is set, the fully qualified path to the generated file is output to STDOUT followed by `\n` on startup to allow the client language library to retrieve it.
 
@@ -90,7 +93,7 @@ Sets the default time in seconds that a query is allowed to run before it is can
 Sets the number of pending connections allowed for the MQI as in `tcp_listen/2`. If not provided, the default is `5`.
 
 - run_server_on_thread(+Run_Server_On_Thread)
-Determines whether `mqi/1` runs in the background on its own thread or blocks until the MQI shuts down.  Must be missing or set to `true` when running in ["Embedded Mode"](#mqi-embedded-mode) so that the SWI Prolog process can exit properly. If not set, the default is `true`.
+Determines whether `mqi_start/1` runs in the background on its own thread or blocks until the MQI shuts down.  Must be missing or set to `true` when running in ["Embedded Mode"](#mqi-embedded-mode) so that the SWI Prolog process can exit properly. If not set, the default is `true`.
 
 - server_thread(?Server_Thread)
 Specifies or retrieves the name of the thread the MQI will run on if `run_server_on_thread(true)`. Passing in an atom for Server_Thread will only set the server thread name if run_server_on_thread(true).  If `Server_Thread` is a variable, it is unified with a generated name.
@@ -107,7 +110,7 @@ The messages the Machine Query Interface responds to are described below. A few 
 - Every connection is in its own separate thread. Opening more than one connection means the code is running concurrently.
 - Closing the socket without sending `close` and waiting for a response will halt the process if running in ["Embedded Mode"](#mqi-embedded-mode). This is so that stopping a debugger doesn't leave the process orphaned.
 - All messages are request/response messages. After sending, there will be exactly one response from the MQI.
-- Timeout in all of the commands is in seconds. Sending a variable (e.g. `_`) will use the default timeout passed to the initial `mqi/1` predicate and `-1` means no timeout.
+- Timeout in all of the commands is in seconds. Sending a variable (e.g. `_`) will use the default timeout passed to the initial `mqi_start/1` predicate and `-1` means no timeout.
 - All queries are run in the default module context of `user`. `module/1` has no effect.
 
 ### Machine Query Interface Message Format {#mqi-message-format}
@@ -142,7 +145,7 @@ The full list of Machine Query Interface messages is described below:
 
 Runs `Goal` on the connection's designated query thread. Stops accepting new commands until the query is finished and it has responded with the results.  If a previous query is still in progress, waits until the previous query finishes (discarding that query's results) before beginning the new query.
 
-Timeout is in seconds and indicates a timeout for generating all results for the query. Sending a variable (e.g. `_`) will use the default timeout passed to the initial `mqi/1` predicate and `-1` means no timeout.
+Timeout is in seconds and indicates a timeout for generating all results for the query. Sending a variable (e.g. `_`) will use the default timeout passed to the initial `mqi_start/1` predicate and `-1` means no timeout.
 
 While it is waiting for the query to complete, sends a "." character *not* in message format, just as a single character, once every two seconds to proactively ensure that the client is alive. Those should be read and discarded by the client.
 
@@ -162,7 +165,7 @@ Response:
 
 Starts a Prolog query specified by `Goal` on the connection's designated query thread. Answers to the query, including exceptions, are retrieved afterwards by sending the `async_result` message (described below). The query can be cancelled by sending the `cancel_async` message. If a previous query is still in progress, waits until that query finishes (discarding that query's results) before responding.
 
-Timeout is in seconds and indicates a timeout for generating all results for the query. Sending a variable (e.g. `_`) will use the default timeout passed to the initial `mqi/1` predicate and `-1` means no timeout.
+Timeout is in seconds and indicates a timeout for generating all results for the query. Sending a variable (e.g. `_`) will use the default timeout passed to the initial `mqi_start/1` predicate and `-1` means no timeout.
 
 If the socket closes before a response is sent, the connection is terminated, the query is aborted and (if running in ["Embedded Mode"](#mqi-embedded-mode)) the SWI Prolog process shuts down.
 
@@ -318,7 +321,7 @@ mqi_start(Options) :-
 
 
 %! mqi_start is semidet.
-%Main entry point for running the Machine Query Interface in ["Embedded Mode"](#mqi-embedded-mode) and designed to be called from the command line. Embedded Mode is used when launching the Machine Query Interface as an embedded part of another language (e.g. Python). Calling mqi/0 from Prolog interactively is not recommended as it depends on Prolog exiting to stop the MQI, instead use mqi/1 for interactive use.
+%Main entry point for running the Machine Query Interface in ["Embedded Mode"](#mqi-embedded-mode) and designed to be called from the command line. Embedded Mode is used when launching the Machine Query Interface as an embedded part of another language (e.g. Python). Calling mqi_start/0 from Prolog interactively is not recommended as it depends on Prolog exiting to stop the MQI, instead use mqi_start/1 for interactive use.
 %
 %To launch embedded mode:
 %
@@ -326,13 +329,13 @@ mqi_start(Options) :-
 %swipl --quiet -g mqi_start -t halt -- --write_connection_values=true
 %~~~
 %
-%This will start SWI Prolog and invoke the mqi/0 predicate and exit the process when that predicate stops. Any command line arguments after the standalone `--` will be passed as Options. These are the same Options that mqi/1 accepts and are passed to it directly. Some options are expressed differently due to command line limitations, see mqi/1 Options for more information.
+%This will start SWI Prolog and invoke the mqi_start/0 predicate and exit the process when that predicate stops. Any command line arguments after the standalone `--` will be passed as Options. These are the same Options that mqi_start/1 accepts and are passed to it directly. Some options are expressed differently due to command line limitations, see mqi_start/1 Options for more information.
 %
 %Any Option values that causes issues during command line parsing (such as spaces) should be passed with =|""|= like this:
 %
 %~~~
-% swipl --quiet -g mqi_start -t halt -- --write_connection_values=true
-% --password="HGJ SOWLWW WNDSJD" ~~~
+% swipl --quiet -g mqi_start -t halt -- --write_connection_values=true --password="HGJ SOWLWW WNDSJD"
+%~~~
 
 
 % Turn off int signal when running in embedded mode so the client language
@@ -367,7 +370,7 @@ quit(_) :-
 
 %! mqi_stop(+Server_Thread_ID:atom) is det.
 %
-% If `Server_Thread_ID` is a variable, stops all Machine Query Interfaces and associated threads.  If `Server_Thread_ID` is an atom, then only the MQI with that `Server_Thread_ID` is stopped. `Server_Thread_ID` can be provided or retrieved using `Options` in `mqi/1`.
+% If `Server_Thread_ID` is a variable, stops all Machine Query Interfaces and associated threads.  If `Server_Thread_ID` is an atom, then only the MQI with that `Server_Thread_ID` is stopped. `Server_Thread_ID` can be provided or retrieved using `Options` in `mqi_start/1`.
 %
 % Always succeeds.
 

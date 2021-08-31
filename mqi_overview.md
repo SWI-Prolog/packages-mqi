@@ -26,7 +26,7 @@ A Python 3.x library that integrates Python with SWI Prolog using the Machine Qu
 In general, to use the Machine Query Interface with any programming language:
 
     1. Install SWI Prolog itself on the machine the application will run on.
-    2. Check if your SWI Prolog version includes the MQI by launching it and typing `?- mqi([]).` If it can't find it, see below for how to install it.
+    2. Check if your SWI Prolog version includes the MQI by launching it and typing `?- mqi_start([]).` If it can't find it, see below for how to install it.
     3. Ensure that the system path includes a path to the `swipl` executable from that installation.
     4. Make sure the application (really the user that launches the application) has permission to launch the SWI Prolog process. Unless your system is unusually locked down, this should be allowed by default.  If not, you'll need to set the appropriate permissions to allow this.
     5. Install (or write!) the library you'll be using to access the MQI in your language of choice.
@@ -75,7 +75,7 @@ The basic rule to remember is: any predicates designed to interact with or chang
 
 
 ## Embedded Mode: Integrating the Machine Query Interface Into a New Programming Language {#mqi-embedded-mode}
-The most common way to use the Machine Query Interface is to find a library that wraps and exposes it as a native part of another programming language such as the [Python =|swiplserver|= library](#mqi-python-installation). This section describes how to build one if there isn't yet a library for your language.  To do this, you'll need to familiarize yourself with the MQI protocol as described in the `mqi/1` documentation. However, to give an idea of the scope of work required, below is a typical interaction done (invisibly to the user) in the implementation of any programming language library:
+The most common way to use the Machine Query Interface is to find a library that wraps and exposes it as a native part of another programming language such as the [Python =|swiplserver|= library](#mqi-python-installation). This section describes how to build one if there isn't yet a library for your language.  To do this, you'll need to familiarize yourself with the MQI protocol as described in the `mqi_start/1` documentation. However, to give an idea of the scope of work required, below is a typical interaction done (invisibly to the user) in the implementation of any programming language library:
 
 
      1. Launch the SWI Prolog process using (along with any other options the user requests): =|swipl --quiet -g mqi_start -t halt -- --write_connection_values=true|=.  To work, the `swipl` Prolog executable will need to be on the path or specified in the command. This launches SWI Prolog, starts the MQI, and writes the chosen port and password to STDOUT.  This way of launching invokes the mqi/0 predicate that turns off the `int` (i.e. Interrupt/SIGINT) signal to Prolog. This is because some languages (such as Python) use that signal during debugging and it would be otherwise passed to the client Prolog process and switch it into the debugger.  See the mqi/0 predicate for more information on other command line options.
@@ -182,7 +182,7 @@ And here's the output:
 
 Other notes about creating a new library to communicate with the MQI:
 - Where appropriate, use similar names and approaches to the [Python library](https://github.com/EricZinda/swiplserver) when designing your language library. This will give familiarity and faster learning for users that use more than one language.
-- Use the `debug/1` predicate described in the `mqi/1` documentation to turn on debug tracing. It can really speed up debugging.
+- Use the `debug/1` predicate described in the `mqi_start/1` documentation to turn on debug tracing. It can really speed up debugging.
 - Read the STDOUT and STDERR output of the SWI Prolog process and output them to the debugging console of the native language to help users debug their Prolog application.
 
 ## Standalone Mode: Debugging Prolog Code Used in an Application {#mqi-standalone-mode}
@@ -190,7 +190,7 @@ When using the Machine Query Interface from another language, debugging the Prol
 
 As the MQI is a multithreaded application, debugging the running code requires using the multithreaded debugging features of SWI Prolog as described in the section on ["Debugging Threads"](threaddebug) in the SWI Prolog documentation. A typical flow for Standalone Mode is:
 
-    1. Launch SWI Prolog and call the `mqi/1` predicate specifying a port and password. Use the `tdebug/0` predicate to set all threads to debugging mode like this: `tdebug, mqi([port(4242), password(debugnow)])`.
+    1. Launch SWI Prolog and call the `mqi_start/1` predicate specifying a port and password. Use the `tdebug/0` predicate to set all threads to debugging mode like this: `tdebug, mqi_start([port(4242), password(debugnow)])`.
     2. Set the port and password in the initialization API in the native language being used.
     3. Launch the application and go through the steps to reproduce the issue.
 
