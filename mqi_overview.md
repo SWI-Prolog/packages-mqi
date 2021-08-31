@@ -1,5 +1,5 @@
 # Machine Query Interface Overview		{#mqi-overview}
-The SWI Prolog Machine Query Interface ('MQI') is designed to enable embedding SWI Prolog into just about any programming language (Python, Go, C#, etc) in a straightforward way. It is designed for scenarios that need to use SWI Prolog as a local implementation detail of another language. Think of it as running SWI Prolog "like a library". It can support any programming language that can launch processes, read their STDOUT pipe, and send and receive JSON over TCP/IP. A Python 3 library is included as a part of SWI Prolog, see [](#mqi-python-installation).
+The SWI Prolog Machine Query Interface ('MQI') is designed to enable embedding SWI Prolog into just about any programming language (Python, Go, C#, etc) in a straightforward way. It is designed for scenarios that need to use SWI Prolog as a local implementation detail of another language. Think of it as running SWI Prolog "like a library". It can support any programming language that can launch processes, read their STDOUT pipe, and send and receive JSON over TCP/IP. A Python 3 library is included as a part of SWI Prolog, see [Installation Steps for Python](#mqi-python-installation).
 
 Key features of the MQI:
 
@@ -19,7 +19,7 @@ The server can be used in two different modes:
 Note that the MQI is related to the [Pengines library](pengine-references), but where the Pengines library is focused on a client/server, multi-tenet, sandboxed environment, the MQI is local, single tenet and unconstrained. Thus, when the requirement is to embed Prolog within another programming language "like a library", it can be a good solution for exposing the full power of Prolog with low integration overhead.
 
 ## Installation Steps for Python {#mqi-python-installation}
-A Python 3.x library that integrates Python with SWI Prolog using the Machine Query Interface is included with in the `libs` directory of the SWI Prolog installation. It is also available using =|pip install swiplserver|=. See the [Python swiplserver library documentation](https://blog.inductorsoftware.com/swiplserver/swiplserver/prologserver.html) for more information on how to use and install it from either location.
+A Python 3.x library that integrates Python with SWI Prolog using the Machine Query Interface is included within the `libs` directory of the SWI Prolog installation. It is also available using =|pip install swiplserver|=. See the [Python swiplserver library documentation](https://blog.inductorsoftware.com/swiplserver/swiplserver/prologserver.html) for more information on how to use and install it from either location.
 
 ## Installation Steps for Other Languages {#mqi-language-installation}
 
@@ -53,10 +53,10 @@ X = third.
 ~~~
 ~~~
 # Python using the swiplserver library
-from swiplserver import PrologServer, PrologThread
+from swiplserver import PrologMQI, PrologThread
 
-with PrologServer() as server:
-    with server.create_thread() as prolog_thread:
+with PrologMQI() as mqi:
+    with mqi.create_thread() as prolog_thread:
         result = prolog_thread.query("member(X, [first, second, third]).")
         print(result)
 
@@ -78,7 +78,7 @@ The basic rule to remember is: any predicates designed to interact with or chang
 The most common way to use the Machine Query Interface is to find a library that wraps and exposes it as a native part of another programming language such as the [Python =|swiplserver|= library](#mqi-python-installation). This section describes how to build one if there isn't yet a library for your language.  To do this, you'll need to familiarize yourself with the MQI protocol as described in the `mqi_start/1` documentation. However, to give an idea of the scope of work required, below is a typical interaction done (invisibly to the user) in the implementation of any programming language library:
 
 
-     1. Launch the SWI Prolog process using (along with any other options the user requests): =|swipl --quiet -g mqi_start -t halt -- --write_connection_values=true|=.  To work, the `swipl` Prolog executable will need to be on the path or specified in the command. This launches SWI Prolog, starts the MQI, and writes the chosen port and password to STDOUT.  This way of launching invokes the mqi_start/0 predicate that turns off the `int` (i.e. Interrupt/SIGINT) signal to Prolog. This is because some languages (such as Python) use that signal during debugging and it would be otherwise passed to the client Prolog process and switch it into the debugger.  See the mqi_start/0 predicate for more information on other command line options.
+     1. Launch the SWI Prolog process using (along with any other options the user requests): =|swipl --quiet -g mqi_start -t halt -- --write_connection_values=true|=.  To work, the `swipl` Prolog executable will need to be on the path or the path needs to be specified in the command. This launches SWI Prolog, starts the MQI, and writes the chosen port and password to STDOUT.  This way of launching invokes the mqi_start/0 predicate that turns off the `int` (i.e. Interrupt/SIGINT) signal to Prolog. This is because some languages (such as Python) use that signal during debugging and it would be otherwise passed to the client Prolog process and switch it into the debugger.  See the mqi_start/0 predicate for more information on other command line options.
      2. Read the SWI Prolog STDOUT to retrieve the TCP/IP port and password. They are sent in that order, delimited by '\n'.
 
 ~~~
@@ -205,10 +205,10 @@ true.
 ~~~
 ~~~
 # Python using the swiplserver library {#mqi-library}
-from swiplserver import PrologServer, PrologThread
+from swiplserver import PrologMQI, PrologThread
 
-with PrologServer(4242, "debugnow") as server:
-    with server.create_thread() as prolog_thread:
+with PrologMQI(4242, "debugnow") as mqi:
+    with mqi.create_thread() as prolog_thread:
         # Your code to be debugged here
 ~~~
 
@@ -363,4 +363,3 @@ Stops the MQI and ends the SWI Prolog process. This allows client language libra
 
 Response:
 `true([[]])`
-

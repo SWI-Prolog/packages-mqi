@@ -42,14 +42,15 @@
 
 Starts a Prolog Machine Query Interface ('MQI') using Options. The MQI is normally started automatically by a library built for a particular programming language such as the [`swiplserver` Python library](#mqi-python-installation), but starting manually can be useful when debugging Prolog code in some scenarios. See the documentation on ["Standalone Mode"](#mqi-standalone-mode) for more information.
 
-Once started, the MQI listens for TCP/IP or Unix Domain Socket connections and authenticates them using the password provided before processing any messages.  The messages processed by the MQI are described [below](#mqi-messages).
+Once started, the MQI listens for TCP/IP or Unix Domain Socket connections and authenticates them using the password provided (or created depending on options) before processing any messages.  The messages processed by the MQI are described [below](#mqi-messages).
 
 For debugging, the server outputs traces using the `debug/3` predicate so that the server operation can be observed by using the `debug/1` predicate. Run the following commands to see them:
 
 - `debug(mqi(protocol))`: Traces protocol messages to show the flow of commands and connections.  It is designed to avoid filling the screen with large queries and results to make it easier to read.
 - `debug(mqi(query))`: Traces messages that involve each query and its results. Therefore it can be quite verbose depending on the query.
 
-__Options__
+
+## Options
 
 Options is a list containing any combination of the following options. When used in the Prolog top level (i.e. in [Standalone Mode](#mqi-standalone-mode)), these are specified as normal Prolog options like this:
 ~~~
@@ -183,7 +184,7 @@ mqi_start(Options) :-
 %
 %This will start SWI Prolog and invoke the mqi_start/0 predicate and exit the process when that predicate stops. Any command line arguments after the standalone `--` will be passed as Options. These are the same Options that mqi_start/1 accepts and are passed to it directly. Some options are expressed differently due to command line limitations, see mqi_start/1 Options for more information.
 %
-%Any Option values that causes issues during command line parsing (such as spaces) should be passed with =|""|= like this:
+%Any Option values that cause issues during command line parsing (such as spaces) should be passed with =|""|= like this:
 %
 %~~~
 % swipl --quiet -g mqi_start -t halt -- --write_connection_values=true --password="HGJ SOWLWW WNDSJD"

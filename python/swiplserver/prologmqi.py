@@ -26,7 +26,7 @@ Installation:
 
     If your SWI Prolog doesn't yet include the Machine Query Interface:
 
-    1. Download the `mqi.pl` file from the [GitHub repository](https://github.com/EricZinda/swiplserver/tree/main/mqi).
+    1. Download the `mqi.pl` file from the [GitHub repository](https://github.com/SWI-Prolog/packages-mqi/blob/master/mqi.pl).
     2. Open an operating system command prompt and go to the directory where you downloaded `mqi.pl`.
     3. Run the below command. On Windows the command prompt must be [run as an administrator](https://www.wikihow.com/Run-Command-Prompt-As-an-Administrator-on-Windows). On Mac or Linux, start the command with `sudo` as in `sudo swipl -s ...`.
 
@@ -102,12 +102,12 @@ Debugging:
 
     `swiplserver` normally launches SWI Prolog and starts the Machine Query Interface so that it can connect and run queries. To debug your code using Prolog itself, you can do this manually and connect your application to it. A typical flow for standalone mode is:
 
-    1. Launch SWI Prolog and call the `mqi_start/1` predicate, specifying a port and password (documentation is [here]( https://blog.inductorsoftware.com/swiplserver/mqi/mqi.html)). Use the `tdebug/0` predicate to set all threads to debugging mode like this: `tdebug, mqi_start([port(4242), password(debugnow)])`.
+    1. Launch SWI Prolog and call the `mqi_start/1` predicate, specifying a port and password (documentation is [here](https://www.swi-prolog.org/pldoc/man?predicate=mqi_start/1)). Use the `tdebug/0` predicate to set all threads to debugging mode like this: `tdebug, mqi_start([port(4242), password(debugnow)])`.
     2. Optionally run the predicate `debug(mqi(_)).` in Prolog to turn on tracing for the Machine Query Interface.
     3. Set the selected port and password when you call `PrologMQI.__init__()`.
     4. Launch the application and go through the steps to reproduce the issue.
 
-    (As the Machine Query Interface is multithreaded, debugging the running code requires using the multithreaded debugging features of SWI Prolog as described in the section on "Debugging Threads" in the SWI Prolog documentation.)
+    (As the Machine Query Interface is multithreaded, debugging the running code requires using the multithreaded debugging features of SWI Prolog as described in the section on ["Debugging Threads"](https://www.swi-prolog.org/pldoc/man?section=threaddebug) in the SWI Prolog documentation.)
 
     At this point, all of the multi-threaded debugging tools in SWI Prolog are available for debugging the problem. If the issue is an unhandled or unexpected exception, the exception debugging features of SWI Prolog can be used to break on the exception and examine the state of the application.  If it is a logic error, breakpoints can be set to halt at the point where the problem appears, etc.
 
@@ -235,7 +235,7 @@ class PrologMQI:
 
         All arguments are optional and the defaults are set to the recommended settings that work best on all platforms during development. In production on Unix systems, consider using unix_domain_socket to further decrease security attack surface area.
 
-        For debugging scenarios, SWI Prolog can be launched manually and this class can be configured to (locally) connect to it using launch_mqi = False. This allows for inspection of the Prolog state and usage of the SWI Prolog debugging tools while your application is running. See the documentation for the Prolog `mqi_start/1` predicate for more information on how to run the Machine Query Interface in "Standalone Mode".
+        For debugging scenarios, SWI Prolog can be launched manually and this class can be configured to (locally) connect to it using launch_mqi = False. This allows for inspection of the Prolog state and usage of the SWI Prolog debugging tools while your application is running. See the documentation for the Prolog [`mqi_start/1`](https://www.swi-prolog.org/pldoc/man?predicate=mqi_start/1) predicate for more information on how to run the Machine Query Interface in "Standalone Mode".
 
         Examples:
             To automatically launch a SWI Prolog process using TCP/IP localhost and an automatically chosen port and password (the default):
@@ -243,10 +243,10 @@ class PrologMQI:
                 with PrologMQI() as mqi:
                     # your code here
 
-            To connect to an existing SWI Prolog process that has already started the `mqi_start/1` predicate and is using an automatically generated Unix Domain Socket and a password of '8UIDSSDXLPOI':
+            To connect to an existing SWI Prolog process that has already started the `mqi_start/1` predicate and is using an automatically generated Unix Domain Socket (this value will be different for every launch) and a password of '8UIDSSDXLPOI':
 
                 with PrologMQI(launch_mqi = False,
-                                  unix_domain_socket = '',
+                                  unix_domain_socket = '/tmp/swipl_udsock_15609_1/swipl_15609_2',
                                   password = '8UIDSSDXLPOI') as mqi:
                     # your code here
 
@@ -362,7 +362,7 @@ class PrologMQI:
 
     def start(self):
         """
-        Start a new SWI Prolog process associated with this class using the settings from `PrologMQI.__init__()`. If `launch_mqi` is False, does nothing.
+        Start a new SWI Prolog process associated with this class using the settings from `PrologMQI.__init__()` and start the Machine Query Interface using the `mqi_start` Prolog predicate. If `launch_mqi` is False, does nothing.
 
         To create the SWI Prolog process, 'swipl' must be on the system path. Manages the lifetime of the process it creates, ending it on `PrologMQI.stop()`.
 
@@ -543,7 +543,7 @@ class PrologThread:
 
     def start(self):
         """
-        Connect to the `prolog_mqi` specified in `PrologThread` and start a new thread in it. Launch the server if `launch_mqi` is `True` on that object. Does not start a Python thread.
+        Connect to the `prolog_mqi` specified in `PrologThread` and start a new thread in it. Launch SWI Prolog and start the Machine Query Interface using the `mqi/1` predicate if `launch_mqi` is `True` on that object. Does not start a Python thread.
 
         Does nothing if the thread is already started.
 
