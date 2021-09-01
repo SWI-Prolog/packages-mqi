@@ -50,7 +50,7 @@ For debugging, the server outputs traces using the `debug/3` predicate so that t
 - `debug(mqi(query))`: Traces messages that involve each query and its results. Therefore it can be quite verbose depending on the query.
 
 
-## Options
+__Options__
 
 Options is a list containing any combination of the following options. When used in the Prolog top level (i.e. in [Standalone Mode](#mqi-standalone-mode)), these are specified as normal Prolog options like this:
 ~~~
