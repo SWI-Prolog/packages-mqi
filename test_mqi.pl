@@ -78,14 +78,14 @@ run_test_script(Script, Status, EssentialOnly) :-
     ),
     process_wait(PID, Status).
 
-:- begin_tests(py_mqi_fast, []).
+:- begin_tests(py_mqi_fast, [sto(rational_trees)]).
 
 test(mqi, Status == exit(0)):-
     run_test_script('python/test_prologserver.py', Status, 'True').
 
 :- end_tests(py_mqi_fast).
 
-:- begin_tests(py_mqi, []).
+:- begin_tests(py_mqi, [sto(rational_trees)]).
 
 test(mqi, Status == exit(0)):-
     run_test_script('python/test_prologserver.py', Status, 'False').
