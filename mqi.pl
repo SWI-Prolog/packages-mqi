@@ -153,9 +153,11 @@ mqi_start(Options) :-
     ),
     option(password(Password), Options, _),
     (   var(Password)
-    ->  (   uuid(UUID, [format(integer)]),
-            format(string(Password), '~d', [UUID])
-        )
+    ->  (   current_prolog_flag(bounded, false)
+        ->  uuid(UUID, [format(integer)])
+        ;   UUID is random(1<<62)
+        ),
+        format(string(Password), '~d', [UUID])
     ;   true
     ),
     string_concat(Password, '.\n', Final_Password),
