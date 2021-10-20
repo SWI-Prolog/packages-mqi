@@ -201,7 +201,7 @@ mqi_start(Options) :-
 % since it doesn't seem possible to pass create_unix_domain_socket=_ on the command line
 % and have it interpreted as a variable.
 mqi_start :-
-    current_prolog_flag(os_argv, Argv),
+    current_prolog_flag(argv, Argv),
     argv_options(Argv, _Args, Options),
     append(Options, [exit_main_on_failure(true)], Options1),
     select_option(create_unix_domain_socket(Create_Unix_Domain_Socket), Options1, Options2, false),
