@@ -844,6 +844,7 @@ class TestPrologMQI(ParametrizedTestCase):
                 )
 
     def test_server_options_and_shutdown(self):
+        global secondsTimeoutForThreadExit
         with PrologMQI(
             self.launchServer,
             self.serverPort,
@@ -875,7 +876,7 @@ class TestPrologMQI(ParametrizedTestCase):
                 result = monitorThread.query(f"mqi_stop({serverThreadID})")
                 self.assertEqual(result, True)
                 afterShutdownThreads = self.thread_list(monitorThread)
-                self.wait_for_new_threads_exit(monitorThread, initialThreads, afterShutdownThreads, 3)
+                self.wait_for_new_threads_exit(monitorThread, initialThreads, afterShutdownThreads, secondsTimeoutForThreadExit)
 
                 if os.name != "nt":
                     # unixDomainSocket() should be used if supplied (non-windows).
@@ -899,7 +900,7 @@ class TestPrologMQI(ParametrizedTestCase):
                     )
                     self.assertEqual(result, True)
                     afterShutdownThreads = self.thread_list(monitorThread)
-                    self.wait_for_new_threads_exit(monitorThread, initialThreads, afterShutdownThreads, 3)
+                    self.wait_for_new_threads_exit(monitorThread, initialThreads, afterShutdownThreads, secondsTimeoutForThreadExit)
                     assert not os.path.exists(unixDomainSocket)
 
                     # unixDomainSocket() should be generated if asked for (non-windows).
@@ -922,7 +923,7 @@ class TestPrologMQI(ParametrizedTestCase):
                     )
                     self.assertEqual(result, True)
                     afterShutdownThreads = self.thread_list(monitorThread)
-                    self.wait_for_new_threads_exit(monitorThread, initialThreads, afterShutdownThreads, 3)
+                    self.wait_for_new_threads_exit(monitorThread, initialThreads, afterShutdownThreads, secondsTimeoutForThreadExit)
                     # Temp Socket should not exist
                     assert not os.path.exists(unixDomainSocket)
                     # Neither should Temp directory
@@ -974,11 +975,12 @@ class TestPrologMQI(ParametrizedTestCase):
 
                 # And make sure all the threads went away
                 afterShutdownThreads = self.thread_list(monitorThread)
-                self.wait_for_new_threads_exit(monitorThread, initialThreads, afterShutdownThreads, 3)
+                self.wait_for_new_threads_exit(monitorThread, initialThreads, afterShutdownThreads, secondsTimeoutForThreadExit)
 
                 # Launching this library itself and stopping in the debugger tests writeConnectionValues() and ignoreSigint and haltOnConnectionFailure internal features automatically
 
     def test_server_options_and_shutdown_slow(self):
+        global secondsTimeoutForThreadExit
         if self.essentialOnly:
             print("skipped", flush=True, end=" ")
             return
@@ -1034,7 +1036,7 @@ class TestPrologMQI(ParametrizedTestCase):
                 )
                 sleep(2)
                 afterShutdownThreads = self.thread_list(monitorThread)
-                self.wait_for_new_threads_exit(monitorThread, initialThreads, afterShutdownThreads, 3)
+                self.wait_for_new_threads_exit(monitorThread, initialThreads, afterShutdownThreads, secondsTimeoutForThreadExit)
 
                 # queryTimeout() supplied at startup should apply to queries by default. password() and port() should be used if supplied.
                 socketPort = 4250
@@ -1060,7 +1062,7 @@ class TestPrologMQI(ParametrizedTestCase):
                 result = monitorThread.query(f"mqi_stop({serverThreadID})")
                 self.assertEqual(result, True)
                 afterShutdownThreads = self.thread_list(monitorThread)
-                self.wait_for_new_threads_exit(monitorThread, initialThreads, afterShutdownThreads, 3)
+                self.wait_for_new_threads_exit(monitorThread, initialThreads, afterShutdownThreads, secondsTimeoutForThreadExit)
 
                 # Shutting down a server with an active query should abort it and close all threads properly.
                 result = monitorThread.query(
@@ -1082,7 +1084,7 @@ class TestPrologMQI(ParametrizedTestCase):
                 result = monitorThread.query(f"mqi_stop({serverThreadID})")
                 assert result is True
                 afterShutdownThreads = self.thread_list(monitorThread)
-                self.wait_for_new_threads_exit(monitorThread, initialThreads, afterShutdownThreads, 3)
+                self.wait_for_new_threads_exit(monitorThread, initialThreads, afterShutdownThreads, secondsTimeoutForThreadExit)
 
     def test_unix_domain_socket_embedded(self):
         if os.name != "nt":
@@ -1355,6 +1357,9 @@ if prologArgsString is not None:
     prologArgs = finalArgs
 else:
     prologArgs = None
+
+# How long to wait for a thread to exit
+secondsTimeoutForThreadExit = 60
 
 if __name__ == "__main__":
     print(
