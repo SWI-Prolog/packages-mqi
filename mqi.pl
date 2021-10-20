@@ -214,14 +214,14 @@ mqi_start(Options) :-
 mqi_start :-
     current_prolog_flag(argv, Argv),
     argv_options(Argv, _Args, Options),
-    append(Options, [exit_main_on_failure(true)], Options1),
+    merge_options(Options, [exit_main_on_failure(true)], Options1),
     select_option(create_unix_domain_socket(Create_Unix_Domain_Socket), Options1, Options2, false),
-    (   Create_Unix_Domain_Socket
+    (   Create_Unix_Domain_Socket == true
     ->  append(Options2, [unix_domain_socket(_)], FinalOptions)
     ;   FinalOptions = Options2
     ),
     option(run_server_on_thread(Run_Server_On_Thread), FinalOptions, true),
-    (   Run_Server_On_Thread
+    (   Run_Server_On_Thread == true
     ->  true
     ;   throw(domain_error(cannot_be_set_in_embedded_mode, run_server_on_thread))
     ),
