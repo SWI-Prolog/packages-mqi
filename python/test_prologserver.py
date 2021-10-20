@@ -26,6 +26,7 @@ class ParametrizedTestCase(unittest.TestCase):
         self,
         methodName="runTest",
         essentialOnly=False,
+        failOnUnlikely=False,
         launchServer=True,
         useUnixDomainSocket=None,
         serverPort=None,
@@ -37,6 +38,7 @@ class ParametrizedTestCase(unittest.TestCase):
         self.serverPort = serverPort
         self.password = password
         self.essentialOnly = essentialOnly
+        self.failOnUnlikely = failOnUnlikely
         self.prologPath = os.getenv("PROLOG_PATH") if os.getenv("PROLOG_PATH") else None
         self.prologArgs = prologArgs
 
@@ -44,6 +46,7 @@ class ParametrizedTestCase(unittest.TestCase):
     def parametrize(
         testcase_klass,
         essentialOnly=False,
+        failOnUnlikely=False,
         test_item_name=None,
         launchServer=True,
         useUnixDomainSocket=None,
@@ -62,6 +65,7 @@ class ParametrizedTestCase(unittest.TestCase):
                     testcase_klass(
                         name,
                         essentialOnly=essentialOnly,
+                        failOnUnlikely=failOnUnlikely,
                         launchServer=launchServer,
                         useUnixDomainSocket=useUnixDomainSocket,
                         serverPort=serverPort,
@@ -73,6 +77,7 @@ class ParametrizedTestCase(unittest.TestCase):
                 testcase_klass(
                     test_item_name,
                     essentialOnly=essentialOnly,
+                    failOnUnlikely=failOnUnlikely,
                     launchServer=launchServer,
                     useUnixDomainSocket=useUnixDomainSocket,
                     serverPort=serverPort,
@@ -179,8 +184,15 @@ class TestPrologMQI(ParametrizedTestCase):
     def assertThreadExitExpected(self, client, threadIDList, timeout):
         reasonList = self.thread_failure_reasons(client, threadIDList, timeout)
         for reason in reasonList:
-            # They should exit in an expected way
-            self.assertEqual(reason, "_")
+            # They should exit in an expected way.
+            # However, it can take a while for a thread to exit, especially on a heavily loaded system
+            # which means the test might (wrongly) fail.
+            # So, use an environment variable to control whether the test fails or just prints a warning
+            if reason != "_":
+                if self.failOnUnlikely:
+                    self.assertEqual(reason, "_")
+                else:
+                    print(f"WARNING: Threads '{threadIDList}' did not exit in the allotted time. This can happen if the system is heavily loaded and is thus a warning by default. To turn this into a failure set the environment variable 'SWIPL_TEST_FAIL_ON_UNLIKELY=y'.")
 
     def thread_list(self, prologThread):
         result = prologThread.query("thread_property(ThreadID, status(Status))")
@@ -1267,6 +1279,7 @@ def run_unix_domain_sockets_performance_tests(suite):
 
 def load_tests(loader, standard_tests, pattern):
     global essentialOnly
+    global failOnUnlikely
     suite = unittest.TestSuite()
 
     # Run the perf tests
@@ -1290,6 +1303,8 @@ def load_tests(loader, standard_tests, pattern):
         suite.addTest(
             ParametrizedTestCase.parametrize(
                 TestPrologMQI,
+                essentialOnly=essentialOnly,
+                failOnUnlikely=failOnUnlikely,
                 launchServer=True,
                 useUnixDomainSocket=None,
                 serverPort=None,
@@ -1302,6 +1317,7 @@ def load_tests(loader, standard_tests, pattern):
             ParametrizedTestCase.parametrize(
                 TestPrologMQI,
                 essentialOnly=essentialOnly,
+                failOnUnlikely=failOnUnlikely,
                 launchServer=True,
                 useUnixDomainSocket=PrologMQI.unix_domain_socket_file(socketPath),
                 serverPort=None,
@@ -1313,10 +1329,15 @@ def load_tests(loader, standard_tests, pattern):
 
 
 # This code is to allow the runner of the test to set environment variables
-# That run a smaller set of tests (ESSENTIAL_TESTS_ONLY=True) or to set
-# the path and args to use when PrologServer launches the Prolog process
-# the latter is designed for running in the SWI Prolog build system since
-# it needs certain arguments passed along
+# that:
+#   - run a smaller set of tests (ESSENTIAL_TESTS_ONLY=True)
+#   - set an environment variable that allows tests that can fail in unlikely scenarios to
+#       do so (SWIPL_TEST_FAIL_ON_UNLIKELY = y). Without this set, they will simply output a
+#       warning to the console
+#   - set the path and args to use when PrologServer launches the Prolog process
+#       the latter is designed for running in the SWI Prolog build system since
+#       it needs certain arguments passed along
+failOnUnlikely = os.getenv("SWIPL_TEST_FAIL_ON_UNLIKELY") == "y"
 essentialOnly = os.getenv("ESSENTIAL_TESTS_ONLY") == "True"
 prologPath = os.getenv("PROLOG_PATH")
 prologArgsString = os.getenv("PROLOG_ARGS")
