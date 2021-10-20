@@ -111,6 +111,17 @@ Redirects STDOUT and STDERR to the file path specified.  Useful for debugging th
 :- use_module(library(http/json_convert)).
 :- use_module(library(option)).
 :- use_module(library(term_to_json)).
+:- use_module(library(debug)).
+:- use_module(library(filesex)).
+:- use_module(library(gensym)).
+:- use_module(library(lists)).
+:- use_module(library(main)).
+:- use_module(library(make)).
+:- use_module(library(optparse)).
+:- use_module(library(prolog_source)).
+:- use_module(library(time)).
+:- use_module(library(uuid)).
+
 % One for every Machine Query Interface running
 :- dynamic(mqi_thread/3).
 
