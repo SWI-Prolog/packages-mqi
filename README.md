@@ -7,3 +7,5 @@ Developers are encouraged to use the SWI Prolog MQI to integrate SWI Prolog with
 - [Machine Query Interface Overview](https://www.swi-prolog.org/pldoc/doc_for?object=section(%27packages/mqi.html%27))
 - [Machine Query Interface Predicates Reference](https://www.swi-prolog.org/pldoc/man?section=mqi)
 
+
+Questions or comments about the MQI or the `swiplserver` Python library should be posted to the [SWI Prolog Discourse Group](https://swi-prolog.discourse.group/).  

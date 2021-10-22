@@ -19,7 +19,7 @@ The server can be used in two different modes:
 Note that the MQI is related to the [Pengines library](pengine-references), but where the Pengines library is focused on a client/server, multi-tenet, sandboxed environment, the MQI is local, single tenet and unconstrained. Thus, when the requirement is to embed Prolog within another programming language "like a library", it can be a good solution for exposing the full power of Prolog with low integration overhead.
 
 ## Installation Steps for Python {#mqi-python-installation}
-A Python 3.x library that integrates Python with SWI Prolog using the Machine Query Interface is included within the `libs` directory of the SWI Prolog installation. It is also available using =|pip install swiplserver|=. See the [Python swiplserver library documentation](https://blog.inductorsoftware.com/swiplserver/swiplserver/prologserver.html) for more information on how to use and install it from either location.
+A Python 3.x library that integrates Python with SWI Prolog using the Machine Query Interface is included within the `libs` directory of the SWI Prolog installation. It is also available using =|pip install swiplserver|=. See the [Python swiplserver library documentation](https://www.swi-prolog.org/packages/mqi/prologmqi.html) for more information on how to use and install it from either location.
 
 ## Installation Steps for Other Languages {#mqi-language-installation}
 
@@ -183,7 +183,7 @@ And here's the output:
 ~~~
 
 Other notes about creating a new library to communicate with the MQI:
-- Where appropriate, use similar names and approaches to the [Python library](https://github.com/EricZinda/swiplserver) when designing your language library. This will give familiarity and faster learning for users that use more than one language.
+- Where appropriate, use similar names and approaches to the [Python library](https://github.com/SWI-Prolog/packages-mqi/tree/master/python) when designing your language library. This will give familiarity and faster learning for users that use more than one language.
 - Use the `debug/1` predicate described in the `mqi_start/1` documentation to turn on debug tracing. It can really speed up debugging.
 - Read the STDOUT and STDERR output of the SWI Prolog process and output them to the debugging console of the native language to help users debug their Prolog application.
 
