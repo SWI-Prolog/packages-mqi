@@ -14,6 +14,7 @@ from pathlib import PurePath, PurePosixPath, PureWindowsPath, Path
 import subprocess
 from contextlib import suppress
 import tempfile
+import traceback
 
 
 # From: https://eli.thegreenplace.net/2011/08/02/python-unit-testing-parametrized-test-cases/
@@ -1271,6 +1272,20 @@ class TestPrologMQI(ParametrizedTestCase):
                     f"Best Time to run {iterations} iterations of the Prolog query `true`: {bestResult}"
                 )
 
+    # Run a simple query 1000 times to test for leaks
+    def skip_test_launch_stress(self):
+        for index in range(0, 10000):
+            print(index)
+            with PrologMQI(
+                self.launchServer,
+                self.serverPort,
+                self.password,
+                self.useUnixDomainSocket,
+                prolog_path=self.prologPath,
+            ) as server:
+                with PrologThread(server) as prolog_thread:
+                    prolog_thread.query("true")
+
 
 def run_tcpip_performance_tests(suite):
     suite.addTest(TestPrologMQI("skip_test_protocol_overhead"))
@@ -1301,8 +1316,10 @@ def load_tests(loader, standard_tests, pattern):
     # run_unix_domain_sockets_performance_tests(suite)
 
     # Tests a specific test
-    # suite.addTest(TestPrologMQI('test_server_options_and_shutdown'))
-    # socketPath = os.path.dirname(os.path.realpath(__file__))
+    # suite.addTest(TestPrologMQI('skip_test_launch_stress'))
+    # return suite
+
+    # Tests a specific test with parameters set
     # suite.addTest(ParametrizedTestCase.parametrize(TestPrologMQI, test_item_name="test_debugging_options", launchServer=False,
     #                                                serverPort=4242, password="test"))
 
