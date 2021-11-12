@@ -351,7 +351,6 @@ class PrologMQI:
                     with self.create_thread() as prologThread:
                         prologThread.halt_server()
 
-                result = self._process.wait()
                 # Use __exit__ instead of wait() as it will close stderr/out handles too
                 self._process.__exit__(None, None, None)
 
@@ -997,6 +996,7 @@ class _NonBlockingStreamReader:
         def _print_output(stream):
             while True:
                 line = stream.readline()
+                # When the process exits the stream will return EOF
                 # and allow us to exit the thread cleanly
                 if line:
                     _log.critical(f"Prolog: {line.decode().rstrip()}")
