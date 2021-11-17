@@ -14,8 +14,12 @@ pkg_doc(mqi
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/packages/mqi/python/swiplserver
         DESTINATION ${SWIPL_INSTALL_PREFIX}/lib)
 
-test_libs(mqi
-	  PACKAGES plunit)
+find_program(PROG_PYTHON NAMES python3)
+
+if(PROG_PYTHON)
+  test_libs(mqi
+	    PACKAGES plunit)
+endif()
 
 if(INSTALL_TESTS)
   install(DIRECTORY python
