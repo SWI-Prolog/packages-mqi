@@ -344,6 +344,14 @@ class TestPrologMQI(ParametrizedTestCase):
                 result = client.query("noFreeVariablesMultipleResults")
                 assert [True, True, True] == result
 
+                # Use characters that are encoded in UTF8 in: a one byte (1) two bytes (©) and three bytes (≠)
+                # To test message format and make sure it handles non-ascii characters
+                client.query(
+                    "retractall(oneFreeVariableMultipleResults), assert((oneFreeVariableMultipleResults(X) :- member(X, [1, '©', '≠'])))"
+                )
+                result = client.query("oneFreeVariableMultipleResults(X)")
+                assert [{'X': 1}, {'X': '©'}, {'X': '≠'}] == result
+
                 # Most basic query with single answer and two free variables
                 client.query(
                     "(retractall(twoFreeVariablesOneResult(X, Y)), assert((twoFreeVariablesOneResult(X, Y) :- X = 1, Y = 1)))"
@@ -434,10 +442,11 @@ class TestPrologMQI(ParametrizedTestCase):
                 result = client.query_async_result()
                 assert True == result
 
-                # async query with all results and free variables
-                client.query_async("member(X, [first, second, third])")
+                # Use characters that are encoded in UTF8 in: a one byte (1) two bytes (©) and three bytes (≠)
+                # To test message format and make sure it handles non-ascii characters
+                client.query_async("member(X, [1, ©, ≠])")
                 result = client.query_async_result()
-                assert [{"X": "first"}, {"X": "second"}, {"X": "third"}] == result
+                assert [{"X": 1}, {"X": "©"}, {"X": "≠"}] == result
 
                 # async query with all results that gets cancelled while goal is executing
                 client.query_async("(member(X, [Y=a, sleep(3), Y=b]), X)")
@@ -472,15 +481,16 @@ class TestPrologMQI(ParametrizedTestCase):
                     caughtException = True
                 assert caughtException
 
-                # an async query with multiple results as individual results
-                client.query_async("member(X, [first, second, third])", find_all=False)
+                # Use characters that are encoded in UTF8 in: a one byte (1) two bytes (©) and three bytes (≠)
+                # To test message format and make sure it handles non-ascii characters
+                client.query_async("member(X, [1, ©, ≠])", find_all=False)
                 results = []
                 while True:
                     result = client.query_async_result()
                     if result is None:
                         break
                     results.append(result[0])
-                assert [{"X": "first"}, {"X": "second"}, {"X": "third"}] == results
+                assert [{"X": 1}, {"X": "©"}, {"X": "≠"}] == results
 
                 # Async query with individual results that times out on second of three results
                 client.query_async(
@@ -1110,6 +1120,7 @@ class TestPrologMQI(ParametrizedTestCase):
                     result = prologThread.query("true")
                     self.assertEqual(result, True)
 
+
     def test_python_classes(self):
         # Using a thread without starting it should start the server
         with PrologMQI(
@@ -1316,12 +1327,12 @@ def load_tests(loader, standard_tests, pattern):
     # run_unix_domain_sockets_performance_tests(suite)
 
     # Tests a specific test
-    # suite.addTest(TestPrologMQI('skip_test_launch_stress'))
+    # suite.addTest(TestPrologMQI('test_sync_query'))
     # return suite
 
     # Tests a specific test with parameters set
-    # suite.addTest(ParametrizedTestCase.parametrize(TestPrologMQI, test_item_name="test_debugging_options", launchServer=False,
-    #                                                serverPort=4242, password="test"))
+    # suite.addTest(ParametrizedTestCase.parametrize(TestPrologMQI, test_item_name="test_sync_query", launchServer=False,
+    #                                                serverPort=4242, password="debugnow"))
 
     # Tests a specific test 100 times
     # for index in range(0, 100):

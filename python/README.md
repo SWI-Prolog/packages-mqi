@@ -24,6 +24,7 @@ To install and learn how to use the swiplserver Python library, see [the docs](h
 
 ### Supported Configurations
 Should work on:
+- MQI protocol version 1.x or prior
 - SWI Prolog 8.2.2 or greater (may work on older builds, untested)
 - Any Mac, Linux Variants or Windows that are supported by SWI Prolog
 - Python 3.7 or later (may work on older builds, untested)

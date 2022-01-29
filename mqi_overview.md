@@ -90,7 +90,7 @@ $ swipl --quiet -g mqi_start -t halt -- --write_connection_values=true
     Now the server is started. To create a connection:
 
      3. Use the language's TCP/IP sockets library to open a socket on the specified port of localhost and send the password as a message. Messages to and from the MQI are in the form =|<stringByteLength>.\n<stringBytes>.\n |= where `stringByteLength` includes the =|.\n|= from the string. For example: =|7.\nhello.\n|= More information on the [message format](#mqi-message-format) is below.
-     4. Listen on the socket for a response message of `true([[threads(Comm_Thread_ID, Goal_Thread_ID)]])` (which will be in JSON form) indicating successful creation of the connection.  `Comm_Thread_ID` and `Goal_Thread_ID` are the internal Prolog IDs of the two threads that are used for the connection. They are sent solely for monitoring and debugging purposes.
+     4. Listen on the socket for a response message of `true([[threads(Comm_Thread_ID, Goal_Thread_ID), version(Major, Minor)]])` (which will be in JSON form) indicating successful creation of the connection.  `Comm_Thread_ID` and `Goal_Thread_ID` are the internal Prolog IDs of the two threads that are used for the connection. They are sent solely for monitoring and debugging purposes. `version` was introduced in version 1.0 of the protocol to allow for detecting the protocol version and should be checked to ensure the protocol version is supported by your library. See `mqi_version/2` for more information and a version history. 
 
 We can try all of this using the Unix tool `nc` (netcat) (also available for Windows) to interactively connect to the MQI. In `nc` hitting `enter` sends =|\n|= which is what the message format requires. The server responses are show indented inline.
 
@@ -107,6 +107,10 @@ $ nc 127.0.0.1 54501
         {
           "args": ["mqi1_conn2_comm", "mqi1_conn2_goal" ],
           "functor":"threads"
+        },
+        {
+          "args": ["1", "0" ],
+          "functor":"version"
         }
           ]
         ]
@@ -238,6 +242,8 @@ For example, to send `hello` as a message you would send this:
 ~~~
  - =|<stringByteLength>|= is the number of bytes of the string to follow (including the =|.\n|=), in human readable numbers, such as `15` for a 15 byte string. It must be followed by =|.\n|=.
  - =|<stringBytes>|= is the actual message string being sent, such as =|run(atom(a), -1).\n|=. It must always end with =|.\n|=. The character encoding used to decode and encode the string is UTF-8.
+
+> Important: The very first version of MQI (version 0.0) had a bug that required messages sent to (but not received from) MQI to use the count of Unicode code points (*not* bytes). This was fixed to properly require byte count in the next version, version 1.0.
 
 To send a message to the MQI, send a message using the message format above to the localhost port or Unix Domain Socket that the MQI is listening on.  For example, to run the synchronous goal `atom(a)`, send the following message:
 ~~~

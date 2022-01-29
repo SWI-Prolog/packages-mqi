@@ -34,7 +34,8 @@
 :- module(mqi,
           [ mqi_start/0,
             mqi_start/1,                % +Options
-            mqi_stop/1                  % ?Thread
+            mqi_stop/1,                 % ?Thread
+            mqi_version/2               % ?Major_Version, ?Minor_Version
           ]).
 
 /**
@@ -109,6 +110,7 @@ Redirects STDOUT and STDERR to the file path specified.  Useful for debugging th
 :- use_module(library(socket)).
 :- use_module(library(http/json)).
 :- use_module(library(http/json_convert)).
+:- use_module(library(http/http_stream)).
 :- use_module(library(option)).
 :- use_module(library(term_to_json)).
 :- use_module(library(debug)).
@@ -136,6 +138,40 @@ Redirects STDOUT and STDERR to the file path specified.  Useful for debugging th
 % Indicates to the communication thread that we are in a place
 % that can be cancelled
 :- dynamic(safe_to_cancel/1).
+
+%!  mqi_version(?Major_Version, ?Minor_Version) is det.
+%
+%  Provides the major and minor version number of the protocol used by the MQI.
+%  The protocol includes the message format and the messages that can
+%  be sent and received from the MQI.
+%
+%  Note that the initial version of the MQI did not have a version predicate so
+%  The proper way for callers to check the version is:
+%
+%  use_module(library(mqi)),
+%  (   current_predicate(mqi_version/2)
+%  ->  mqi_version(Major_Version, Minor_Version)
+%  ;   Major_Version = 0, Minor_Version = 0
+%  )
+%
+%  Major versions are increased when there is a change to the protocol that will
+%  likely break clients written to the previous version. Minor versions are increased
+%  when there is new functionality that will *not* break clients written to the old version
+%
+%  This allows a client written to MQI version 'Client_Major_Version.Client_Minor_Version'
+%  to check for non-breaking compatibility like this:
+%
+%  Client_Major_Version = MQI_Major_Version and Client_Minor_Version <= MQI_Minor_Version
+%
+%  Breaking changes (i.e. Major version increments) should be very rare as the goal is to
+%  have the broadest adoption possible.
+%
+%  Protocol Version History:
+%  0.0 ->   First published version. Had a protocol bug that required messages sent to MQI to
+%           count Unicode code points instead of bytes for the message header.
+%  1.0 ->   Breaking change: Fixed protocol bug so that it properly accepted byte count instead of Unicode code point
+%           count in the message header for messages sent to MQI.
+mqi_version(1, 0).
 
 
 % Password is carefully constructed to be a string (not an atom) so that it is not
@@ -513,7 +549,8 @@ communication_thread_listen(Password, Socket, Encoding, Server_Thread_ID, Goal_T
     (   Password == Sent_Password
     ->  (   debug(mqi(protocol), "Password matched.", []),
             thread_self(Self_ID),
-            reply(Write_Stream, true([[threads(Self_ID, Goal_Thread_ID)]]))
+            mqi_version(Major, Minor),
+            reply(Write_Stream, true([[threads(Self_ID, Goal_Thread_ID), version(Major, Minor)]]))
         )
     ;   (   debug(mqi(protocol), "Password mismatch, failing. ~w", [Sent_Password]),
             reply_error(Write_Stream, password_mismatch),
@@ -878,7 +915,13 @@ write_message(Stream, String) :-
 % in whatever encoding is being used
 read_message(Stream, String) :-
     read_string_length(Stream, Length),
-    read_string(Stream, Length, String).
+    stream_property(Stream, encoding(Encoding)),
+    setup_call_cleanup(
+         stream_range_open(Stream, Tmp, [size(Length)]),
+         ( set_stream(Tmp, encoding(Encoding)),
+           read_string(Tmp, _, String)
+         ),
+         close(Tmp)).
 
 
 % Terminate with '.\n' so we know that's the end of the count
