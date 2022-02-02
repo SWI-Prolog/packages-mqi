@@ -211,7 +211,7 @@ true.
 # Python using the swiplserver library {#mqi-library}
 from swiplserver import PrologMQI, PrologThread
 
-with PrologMQI(4242, "debugnow") as mqi:
+with PrologMQI(launch_mqi=False, port=4242, password="debugnow") as mqi:
     with mqi.create_thread() as prolog_thread:
         # Your code to be debugged here
 ~~~
