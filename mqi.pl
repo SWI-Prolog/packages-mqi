@@ -448,12 +448,12 @@ create_connection(Server_Thread_ID, AcceptFd, Password, Encoding, Query_Timeout,
 goal_thread(Respond_To_Thread_ID) :-
     thread_self(Self_ID),
     throw_if_testing(Self_ID),
-    thread_get_message(Self_ID, goal(Goal, Binding_List, Query_Timeout, Find_All)),
-    debug(mqi(query), "Received Findall = ~w, Query_Timeout = ~w, binding list: ~w, goal: ~w", [Find_All, Query_Timeout, Binding_List, Goal]),
+    thread_get_message(Self_ID, goal(Unexpanded_Goal, Binding_List, Query_Timeout, Find_All)),
+    expand_goal(Unexpanded_Goal, Goal),
+    debug(mqi(query), "Received Findall = ~w, Query_Timeout = ~w, binding list: ~w, unexpanded: ~w, goal: ~w", [Find_All, Query_Timeout, Binding_List, Unexpanded_Goal, Goal]),
     (   Find_All
     ->  One_Answer_Goal = findall(Binding_List, @(user:Goal, user), Answers)
-    ;
-        One_Answer_Goal = ( @(user:Goal, user),
+    ;   One_Answer_Goal = ( @(user:Goal, user),
                             Answers = [Binding_List],
                             send_next_result(Respond_To_Thread_ID, Answers, _, Find_All)
                           )
@@ -463,17 +463,12 @@ goal_thread(Respond_To_Thread_ID) :-
     ->  catch(All_Answers_Goal, Top_Exception, true)
     ;   catch(call_with_time_limit(Query_Timeout, All_Answers_Goal), Top_Exception, true)
     ),
-    (
-        var(Top_Exception)
-    ->  (
-            Find_All
-        ->
-            send_next_result(Respond_To_Thread_ID, Find_All_Answers, _, Find_All)
-        ;
-            send_next_result(Respond_To_Thread_ID, [], no_more_results, Find_All)
+    (   var(Top_Exception)
+    ->  (   Find_All
+        ->  send_next_result(Respond_To_Thread_ID, Find_All_Answers, _, Find_All)
+        ;   send_next_result(Respond_To_Thread_ID, [], no_more_results, Find_All)
         )
-    ;
-        send_next_result(Respond_To_Thread_ID, [], Top_Exception, true)
+    ;   send_next_result(Respond_To_Thread_ID, [], Top_Exception, true)
     ),
     goal_thread(Respond_To_Thread_ID).
 
@@ -883,6 +878,7 @@ reply(Stream, Term) :-
 % Special handling for exceptions since they can have parts that are not
 % "serializable". Ensures they they are always returned in an exception/1 term
 reply_error(Stream, Error_Term) :-
+    debug(mqi(query), "Responding with exception: ~w", [Error_Term]),
     (   error(Error_Value, _) = Error_Term
     ->  Response = exception(Error_Value)
     ;   (   atom(Error_Term)

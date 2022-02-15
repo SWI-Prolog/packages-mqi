@@ -319,6 +319,26 @@ class TestPrologMQI(ParametrizedTestCase):
                 self.round_trip_prolog(client, "a('1b')")
                 self.round_trip_prolog(client, "'a b'(['1b', 'a b'])")
 
+    def test_goal_expansion(self):
+        with PrologMQI(
+            self.launchServer,
+            self.serverPort,
+            self.password,
+            self.useUnixDomainSocket,
+            prolog_path=self.prologPath,
+        ) as server:
+
+            with server.create_thread() as client:
+                # This requires goal expansion to work
+                result = client.query("A = point{x:1, y:2}.put([x=3,z=0]).")
+                assert [{'A': {'x': 3, 'y': 2, 'z': 0}}] == result
+
+                # This requires that goal expansion is also being done when it is in the body of a clause that gets asserted
+                result = client.query("retractall(test_goal_expansion), assert(test_goal_expansion(X, Y) :- Y = point{x:1, y:2}.put([x=X, z=0])).")
+                result = client.query("test_goal_expansion(2, Out)")
+                assert [{'Out': {'x': 2, 'y': 2, 'z': 0}}] == result
+
+
     def test_sync_query(self):
         if self.essentialOnly:
             print("skipped", flush=True, end=" ")
@@ -1327,7 +1347,7 @@ def load_tests(loader, standard_tests, pattern):
     # run_unix_domain_sockets_performance_tests(suite)
 
     # Tests a specific test
-    # suite.addTest(TestPrologMQI('test_sync_query'))
+    # suite.addTest(TestPrologMQI('test_goal_expansion'))
     # return suite
 
     # Tests a specific test with parameters set
