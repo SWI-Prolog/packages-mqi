@@ -2,6 +2,7 @@ import gc
 import json
 import logging
 import os
+import uuid
 from datetime import time
 from tempfile import gettempdir, mkdtemp
 import sys
@@ -1220,7 +1221,7 @@ class TestPrologMQI(ParametrizedTestCase):
 
         tempDir = gettempdir()
         # Put a space in to make sure escaping is working
-        tempFile = os.path.join(tempDir, "swiplserver output.txt")
+        tempFile = os.path.join(tempDir, str(uuid.uuid1()) + " output.txt")
         try:
             os.remove(tempFile)
         except:
@@ -1248,7 +1249,7 @@ class TestPrologMQI(ParametrizedTestCase):
         # Ensure that using embedded mode still sends password and port to STDOUT before redirecting output or
         # embedded mode will fail
         tempDir = gettempdir()
-        tempFile = os.path.join(tempDir, "swiplserveroutput.txt")
+        tempFile = os.path.join(tempDir, str(uuid.uuid1()) + ".txt")
 
         with PrologMQI(
             self.launchServer,
