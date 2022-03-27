@@ -59,6 +59,12 @@ run_test_script(Script, Status, EssentialOnly) :-
     file_directory_name(Swipl, Swipl_Path),
     atomic_list_concat(Args, '~|~', Args_String),
     debug(test, 'swipl in dir ~p; Packed args: ~p', [Swipl_Path, Args_String]),
+    % Python for Windows wants this
+    (   current_prolog_flag(windows, true)
+    ->  getenv('SYSTEMROOT', SR),
+        System_Root = ['SYSTEMROOT'=SR]
+    ;   System_Root = []
+    ),
     process_create(path(python3), [Script],
                    [ stdin(std),
                      stdout(pipe(Out)),
@@ -68,6 +74,7 @@ run_test_script(Script, Status, EssentialOnly) :-
                      environment([ 'PROLOG_PATH'=Swipl_Path,
                                    'PROLOG_ARGS'=Args_String,
                                    'ESSENTIAL_TESTS_ONLY'=EssentialOnly
+                                   | System_Root
                                  ])]),
     (   debugging(test)
     ->  copy_stream_data(Out, current_output)
