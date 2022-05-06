@@ -862,9 +862,11 @@ get_next_result(Goal_Thread_ID, Stream, Options, Answers) :-
 reply_with_result(_, Stream, error(Error)) :-
     !,
     reply_error(Stream, Error).
+
+% Gracefully handle exceptions that can occur during conversion to JSON
 reply_with_result(_, Stream, Result) :-
     !,
-    reply(Stream, Result).
+    catch(reply(Stream, Result), error(Exception, _), reply_with_result(_, Stream, error(Exception))).
 
 
 % Reply with a normal term

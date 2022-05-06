@@ -339,7 +339,6 @@ class TestPrologMQI(ParametrizedTestCase):
                 result = client.query("test_goal_expansion(2, Out)")
                 assert [{'Out': {'x': 2, 'y': 2, 'z': 0}}] == result
 
-
     def test_sync_query(self):
         if self.essentialOnly:
             print("skipped", flush=True, end=" ")
@@ -1318,6 +1317,25 @@ class TestPrologMQI(ParametrizedTestCase):
                 with PrologThread(server) as prolog_thread:
                     prolog_thread.query("true")
 
+    def test_serialization_exceptions(self):
+        with PrologMQI(
+            self.launchServer,
+            self.serverPort,
+            self.password,
+            self.useUnixDomainSocket,
+            prolog_path=self.prologPath,
+        ) as server:
+
+            with server.create_thread() as client:
+                # Send a json value that is known to throw during json serialization to make sure the code
+                # is robust to serialization failures
+                caughtException = False
+                try:
+                    result = client.query("X=json([X - 1]).")
+                except PrologError as error:
+                    assert error.is_prolog_exception("domain_error")
+                    caughtException = True
+                assert caughtException
 
 def run_tcpip_performance_tests(suite):
     suite.addTest(TestPrologMQI("skip_test_protocol_overhead"))
@@ -1348,12 +1366,13 @@ def load_tests(loader, standard_tests, pattern):
     # run_unix_domain_sockets_performance_tests(suite)
 
     # Tests a specific test
-    # suite.addTest(TestPrologMQI('test_goal_expansion'))
+    # suite.addTest(TestPrologMQI('test_variable_attributes'))
     # return suite
 
     # Tests a specific test with parameters set
-    # suite.addTest(ParametrizedTestCase.parametrize(TestPrologMQI, test_item_name="test_sync_query", launchServer=False,
+    # suite.addTest(ParametrizedTestCase.parametrize(TestPrologMQI, test_item_name="test_variable_attributes", launchServer=False,
     #                                                serverPort=4242, password="debugnow"))
+    # return suite
 
     # Tests a specific test 100 times
     # for index in range(0, 100):
