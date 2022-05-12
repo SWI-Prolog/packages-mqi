@@ -16,7 +16,7 @@ The server can be used in two different modes:
     - *Embedded mode*: This is the main use case for the MQI. The user uses a library (just like any other library in their language of choice). That library integrates the MQI by launching the SWI Prolog process, connecting to it, and wrapping the MQI protocol with a language specific interface.
     - *Standalone mode*: The user still uses a library as above, but launches SWI Prolog independently of the language. The client language library connects to that process. This allows the user to see, interact with, and debug the Prolog process while the library interacts with it.
 
-Note that the MQI is related to the [Pengines library](pengine-references), but where the Pengines library is focused on a client/server, multi-tenet, sandboxed environment, the MQI is local, single tenet and unconstrained. Thus, when the requirement is to embed Prolog within another programming language "like a library", it can be a good solution for exposing the full power of Prolog with low integration overhead.
+Note that the MQI is related to the [Pengines library](#pengine-references), but where the Pengines library is focused on a client/server, multi-tenet, sandboxed environment, the MQI is local, single tenet and unconstrained. Thus, when the requirement is to embed Prolog within another programming language "like a library", it can be a good solution for exposing the full power of Prolog with low integration overhead.
 
 ## Installation Steps for Python {#mqi-python-installation}
 A Python 3.x library that integrates Python with SWI Prolog using the Machine Query Interface is included within the `libs` directory of the SWI Prolog installation. It is also available using =|pip install swiplserver|=. See the [Python swiplserver library documentation](https://www.swi-prolog.org/packages/mqi/prologmqi.html) for more information on how to use and install it from either location.
@@ -42,7 +42,7 @@ swipl -s mqi.pl -g "mqi:install_to_library('mqi.pl')" -t halt
 
 ## Prolog Language Differences from the Top Level {#mqi-toplevel-differences}
 
-The Machine Query Interface is designed to act like using the ["top level"](quickstart) prompt of SWI Prolog itself (i.e. the "?-" prompt).  If you've built the Prolog part of your application by loading code, running it and debugging it using the normal SWI Prolog top level, integrating it with your native language should be straightforward: simply run the commands you'd normally run on the top level, but now run them using the query APIs provided by the library built for your target language. Those APIs will allow you to send the exact same text to Prolog and they should execute the same way.  Here's an example using the Python `swiplserver` library:
+The Machine Query Interface is designed to act like using the ["top level"](#quickstart) prompt of SWI Prolog itself (i.e. the "?-" prompt).  If you've built the Prolog part of your application by loading code, running it and debugging it using the normal SWI Prolog top level, integrating it with your native language should be straightforward: simply run the commands you'd normally run on the top level, but now run them using the query APIs provided by the library built for your target language. Those APIs will allow you to send the exact same text to Prolog and they should execute the same way.  Here's an example using the Python `swiplserver` library:
 
 ~~~
 % Prolog Top Level
@@ -70,8 +70,10 @@ While the query functionality of the MQI does run on a thread, it will always be
     - Normally, the SWI Prolog top level runs all user code in the context of a built-in module called "user", as does the MQI. However, the top level allows this to be changed using the module/1 predicate. This predicate has no effect when sent to the MQI.
     - Predefined streams like `user_input` are initially bound to the standard operating system I/O streams (like STDIN) and, since the Prolog process is running invisibly, will obviously not work as expected. Those streams can be changed, however, by issuing commands using system predicates as defined in the SWI Prolog documentation.
     - Every connection to the MQI runs in its own thread, so opening two connections from an application means you are running multithreaded code.
+    - The SWI Prolog top level does special handling to make residual [attributes on variables](#attvar) print out in a human-friendly way. MQI instead returns any residuals in a special variable called `$residuals` that is added to the results.  
+    - Some Prolog extensions do not provide the full answer to a query by means of the variable bindings. The top level does extra work to find where the answers are stored and print them out. All of these extensions have an interface to get to this data as a Prolog term and users of MQI need to do this work themselves.  Examples include: [Constraint Handling Rules (CHR)](#chr) stores constraints in global variables, [Well Founded Semantics](#wfs-toplevel) has the notion of delayed, which is translated into a program that carries the inconsistency if there are conflicting negations, [s(CASP)](https://www.swi-prolog.org/pack/list?p=scasp) has a model and justification. 
 
-The basic rule to remember is: any predicates designed to interact with or change the default behavior of the top level itself probably won't have any effect.
+A basic rule to remember is: any predicates designed to interact with or change the default behavior of the top level itself probably won't have any effect.
 
 
 ## Embedded Mode: Integrating the Machine Query Interface Into a New Programming Language {#mqi-embedded-mode}
@@ -194,7 +196,7 @@ Other notes about creating a new library to communicate with the MQI:
 ## Standalone Mode: Debugging Prolog Code Used in an Application {#mqi-standalone-mode}
 When using the Machine Query Interface from another language, debugging the Prolog code itself can often be done by viewing traces from the Prolog native `writeln/1` or `debug/3` predicates. Their output will be shown in the debugger of the native language used.  Sometimes an issue surfaces deep in an application. When this happens, running the application in the native language while setting breakpoints and viewing traces in Prolog itself is often the best debugging approach. Standalone mode is designed for this scenario.
 
-As the MQI is a multithreaded application, debugging the running code requires using the multithreaded debugging features of SWI Prolog as described in the section on ["Debugging Threads"](threaddebug) in the SWI Prolog documentation. A typical flow for Standalone Mode is:
+As the MQI is a multithreaded application, debugging the running code requires using the multithreaded debugging features of SWI Prolog as described in the section on ["Debugging Threads"](#threaddebug) in the SWI Prolog documentation. A typical flow for Standalone Mode is:
 
     1. Launch SWI Prolog and call the `mqi_start/1` predicate specifying a port and password. Use the `tdebug/0` predicate to set all threads to debugging mode like this: `tdebug, mqi_start([port(4242), password(debugnow)])`.
     2. Set the port and password in the initialization API in the native language being used.
@@ -273,7 +275,7 @@ When completed, sends a response message using the normal message format indicat
 
 Response:
 
-|`true([Answer1, Answer2, ... ])` | The goal succeeded at least once. The response always includes all answers as if run with findall() (see run_async/3 below to get individual results back iteratively).  Each `Answer` is a list of the assignments of free variables in the answer. If there are no free variables, `Answer` is an empty list. |
+|`true([Answer1, Answer2, ... ])` | The goal succeeded at least once. The response always includes all answers as if run with findall() (see run_async/3 below to get individual results back iteratively).  Each `Answer` is a list of the assignments of free variables in the answer. A special variable called `$residuals` will be added to each answer that has residual [variable constraints on it](#attvar). This will contain a list of all the constraints on all the variables for that answer. If there are no free variables, `Answer` is an empty list. |
 |`false` | The goal failed. |
 |`exception(time_limit_exceeded)` | The query timed out. |
 |`exception(Exception)` | An arbitrary exception was not caught while running the goal. |
@@ -344,7 +346,7 @@ Note that, after sending `cancel_async`, calling `async_result` will return the 
 
 Response:
 
-|`true([Answer1, Answer2, ... ])` | The next answer from the query is a successful answer. Whether there are more than one `Answer` in the response depends on the `findall` setting. Each `Answer` is a list of the assignments of free variables in the answer. If there are no free variables, `Answer` is an empty list.|
+|`true([Answer1, Answer2, ... ])` | The next answer from the query is a successful answer. Whether there are more than one `Answer` in the response depends on the `findall` setting. Each `Answer` is a list of the assignments of free variables in the answer. A special variable called `$residuals` will be added to each answer that has residual [variable constraints on it](#attvar). This will contain a list of all the constraints on all the variables for that answer. If there are no free variables, `Answer` is an empty list.|
 |`false`| The query failed with no answers.|
 |`exception(no_query)` | There is no query in progress.|
 |`exception(result_not_available)` | There is a running query and no results were available in `Timeout` seconds.|

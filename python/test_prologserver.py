@@ -1337,6 +1337,33 @@ class TestPrologMQI(ParametrizedTestCase):
                     caughtException = True
                 assert caughtException
 
+                caughtException = False
+                try:
+                    result = client.query("open_null_stream(X).")
+                except PrologError as error:
+                    assert error.is_prolog_exception("type_error")
+                    caughtException = True
+                assert caughtException
+
+    def test_variable_attributes(self):
+        with PrologMQI(
+            self.launchServer,
+            self.serverPort,
+            self.password,
+            self.useUnixDomainSocket,
+            prolog_path=self.prologPath
+        ) as server:
+
+            with server.create_thread() as client:
+                result = client.query("member(X, [A, B, C]), put_attr(X, my_module, x).")
+                [{'$residuals': [{'args': ['A', 'my_module', 'x'], 'functor': 'put_attr'}], 'X': 'A', 'A': 'A',
+                  'B': '_', 'C': '_'},
+                 {'$residuals': [{'args': ['B', 'my_module', 'x'], 'functor': 'put_attr'}], 'X': 'B', 'A': '_',
+                  'B': 'B', 'C': '_'},
+                 {'$residuals': [{'args': ['C', 'my_module', 'x'], 'functor': 'put_attr'}], 'X': 'C', 'A': '_',
+                  'B': '_', 'C': 'C'}] == result
+
+
 def run_tcpip_performance_tests(suite):
     suite.addTest(TestPrologMQI("skip_test_protocol_overhead"))
 
