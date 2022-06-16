@@ -454,19 +454,27 @@ goal_thread(Respond_To_Thread_ID) :-
     debug(mqi(query), "Received Findall = ~w, Query_Timeout = ~w, binding list: ~w, unexpanded: ~w, goal: ~w", [Find_All, Query_Timeout, Binding_List, Unexpanded_Goal, Goal]),
     (   Find_All
     ->  One_Answer_Goal = findall(Binding_List, @(user:Goal, user), Answers)
-    ;   One_Answer_Goal = ( @(user:Goal, user),
-                            Answers = [Binding_List],
-                            send_next_result(Respond_To_Thread_ID, Answers, _, Find_All)
+    ;   One_Answer_Goal = ( findall(    One_Answer,
+                                        (   @(user:Goal, user),
+                                            One_Answer = [Binding_List],
+                                            send_next_result(Respond_To_Thread_ID, One_Answer, _, Find_All)
+                                        ),
+                                        Answers
+                            ),
+                            (   Answers == []
+                            ->  send_next_result(Respond_To_Thread_ID, [], _, Find_All)
+                            ;   true
+                            )
                           )
     ),
-    All_Answers_Goal = run_cancellable_goal(Self_ID, findall(Answers, One_Answer_Goal, [Find_All_Answers | _])),
+    Cancellable_Goal = run_cancellable_goal(Self_ID, One_Answer_Goal),
     (   Query_Timeout == -1
-    ->  catch(All_Answers_Goal, Top_Exception, true)
-    ;   catch(call_with_time_limit(Query_Timeout, All_Answers_Goal), Top_Exception, true)
+    ->  catch(Cancellable_Goal, Top_Exception, true)
+    ;   catch(call_with_time_limit(Query_Timeout, Cancellable_Goal), Top_Exception, true)
     ),
     (   var(Top_Exception)
     ->  (   Find_All
-        ->  send_next_result(Respond_To_Thread_ID, Find_All_Answers, _, Find_All)
+        ->  send_next_result(Respond_To_Thread_ID, Answers, _, Find_All)
         ;   send_next_result(Respond_To_Thread_ID, [], no_more_results, Find_All)
         )
     ;   send_next_result(Respond_To_Thread_ID, [], Top_Exception, true)

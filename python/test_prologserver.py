@@ -457,10 +457,15 @@ class TestPrologMQI(ParametrizedTestCase):
                 # Async queries with all results
                 ##########
 
+                # Most basic async query that fails with all results and no free variables
+                client.query_async("false", find_all=True)
+                result = client.query_async_result()
+                assert False is result
+
                 # Most basic async query with all results and no free variables
                 client.query_async("atom(a)", find_all=True)
                 result = client.query_async_result()
-                assert True == result
+                assert True is result
 
                 # Use characters that are encoded in UTF8 in: a one byte (1) two bytes (©) and three bytes (≠)
                 # To test message format and make sure it handles non-ascii characters
@@ -490,6 +495,12 @@ class TestPrologMQI(ParametrizedTestCase):
                 ##########
                 # Async queries with individual results
                 ##########
+
+                # Most basic async query that fails with all results and no free variables and find_all is False
+                client.query_async("false", find_all=False)
+                result = client.query_async_result()
+                assert False is result
+
 
                 # async query that has a parse error
                 query = "member(X, [first, second, third]"
@@ -1393,7 +1404,7 @@ def load_tests(loader, standard_tests, pattern):
     # run_unix_domain_sockets_performance_tests(suite)
 
     # Tests a specific test
-    # suite.addTest(TestPrologMQI('test_variable_attributes'))
+    # suite.addTest(TestPrologMQI('test_async_query'))
     # return suite
 
     # Tests a specific test with parameters set
