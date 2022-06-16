@@ -1031,7 +1031,9 @@ class _NonBlockingStreamReader:
     def __init__(self, stream):
         def _print_output(stream):
             while True:
-                line = stream.readline()
+                with suppress(Exception):
+                    line = stream.readline()
+
                 # When the process exits the stream will return EOF
                 # and allow us to exit the thread cleanly
                 if line:
