@@ -1027,7 +1027,7 @@ class TestPrologMQI(ParametrizedTestCase):
                 # Rethrow the exception if we are configured to fail on unlikely tests failures
                 raise
             else:
-                stackTrace = ''.join(traceback.format_exception(etype=type(e), value=e, tb=e.__traceback__))
+                stackTrace = ''.join(traceback.format_exception(e, e, e.__traceback__))
                 print(
                     f"WARNING: {e} at {stackTrace}.\n This can happen if the system is heavily loaded and is thus a warning by default. To turn this into a failure set the environment variable 'SWIPL_TEST_FAIL_ON_UNLIKELY=y'."
                 )
