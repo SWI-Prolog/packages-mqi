@@ -20,13 +20,15 @@
 
 \begin{abstract}
 
-This package provides the library \file{mqi.pl} that enables embedding SWI Prolog into just
-about any programming language (Python, Go, C#, etc) in a straightforward way. It is designed
-for scenarios that need to use SWI Prolog as a local implementation detail of another language.
-Think of it as running SWI Prolog "like a library". It can support any programming language
-that can launch processes, read their STDOUT pipe, and send and receive JSON over TCP/IP.
+This package provides the library \file{mqi.pl} that enables embedding
+SWI Prolog into just about any programming language (Python, Go, C\#,
+etc) in a straightforward way. It is designed for scenarios that need to
+use SWI Prolog as a local implementation detail of another language.
+Think of it as running SWI Prolog ``like a library''. It can support any
+programming language that can launch processes, read their STDOUT pipe,
+and send and receive JSON over TCP/IP.
 
- A Python 3.x library is provided.
+A Python 3.x library is provided.
 
 \end{abstract}
 
