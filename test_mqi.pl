@@ -2,7 +2,8 @@
     Author:        Eric Zinda
     E-mail:        ericz@inductorsoftware.com
     WWW:           http://www.inductorsoftware.com
-    Copyright (c)  2021, Eric Zinda
+    Copyright (c)  2021-2023, Eric Zinda
+                              SWI-Prolog Solutions b.v.
     All rights reserved.
 
     Redistribution and use in source and binary forms, with or without
@@ -42,10 +43,40 @@
 
 :- debug(test).
 
+:- dynamic
+    python_exe/1.
+
+has_python :-
+    python_exe(_),
+    !.
+has_python :-
+    has_python(Prog),
+    asserta(python_exe(Prog)).
+
+has_python(Prog) :-
+    exe_options(Options),
+    absolute_file_name(path(python3), Prog, Options).
+
+exe_options(Options) :-
+    current_prolog_flag(windows, true),
+    !,
+    (   Options = [ extensions(['',exe,com]), access(read), file_errors(fail) ]
+    ;   Options = [ extensions(['',exe,com]), access(exist), file_errors(fail) ]
+    ).
+exe_options(Options) :-
+    Options = [ access(execute) ].
+
+
 test_mqi :-
-    run_tests([py_mqi_fast]).
+    (   has_python
+    ->  run_tests([py_mqi_fast])
+    ;   print_message(informational, test_no_python)
+    ).
 test_mqi_all :-
-    run_tests([py_mqi]).
+    (   has_python
+    ->  run_tests([py_mqi])
+    ;   print_message(informational, test_no_python)
+    ).
 
 % Launch the python script with command line arguments so it can, in turn,
 % launch the proper development build of prolog, passing all the same command
@@ -65,7 +96,8 @@ run_test_script(Script, Status, EssentialOnly) :-
         System_Root = ['SYSTEMROOT'=SR]
     ;   System_Root = []
     ),
-    process_create(path(python3), [Script],
+    python_exe(Python),
+    process_create(Python, [Script],
                    [ stdin(std),
                      stdout(pipe(Out)),
                      stderr(pipe(Out)),
@@ -98,3 +130,13 @@ test(mqi, Status == exit(0)):-
     run_test_script('python/test_prologserver.py', Status, 'False').
 
 :- end_tests(py_mqi).
+
+
+		 /*******************************
+		 *           MESSAGES		*
+		 *******************************/
+
+:- multifile prolog:message//1.
+
+prolog:message(test_no_python) -->
+    [ 'Could not find Python.  Skipping MQI tests.' ].
