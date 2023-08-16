@@ -11,7 +11,7 @@ pkg_doc(mqi
             mqi_overview.md
             SOURCE mqi.pl mqipl.tex)
 
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/packages/mqi/python/swiplserver
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/swiplserver
         DESTINATION ${SWIPL_INSTALL_PREFIX}/lib)
 
 find_program(PROG_PYTHON NAMES python3)
