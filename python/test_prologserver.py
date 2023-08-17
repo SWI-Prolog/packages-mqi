@@ -921,10 +921,8 @@ class TestPrologMQI(ParametrizedTestCase):
                     afterShutdownThreads = self.thread_list(monitorThread)
                     self.wait_for_new_threads_exit(monitorThread, initialThreads, afterShutdownThreads, secondsTimeoutForThreadExit)
 
-                    if os.name != "nt":
-                        # unixDomainSocket() should be used if supplied (non-windows).
-                        socketPath = mkdtemp()
-                        unixDomainSocket = PrologMQI.unix_domain_socket_file(socketPath)
+                    unixDomainSocket = unix_domain_socket_path_if_available()
+                    if unixDomainSocket:
                         result = monitorThread.query(
                             f"mqi_start([unix_domain_socket('{unixDomainSocket}'), password(testpassword), server_thread(ServerThreadID)])"
                         )
@@ -1140,7 +1138,7 @@ class TestPrologMQI(ParametrizedTestCase):
                 self.wait_for_new_threads_exit(monitorThread, initialThreads, afterShutdownThreads, secondsTimeoutForThreadExit)
 
     def test_unix_domain_socket_embedded(self):
-        if os.name != "nt":
+        if unix_domain_socket_path_if_available():
             with PrologMQI(
                 launch_mqi=True,
                 unix_domain_socket="",
@@ -1150,7 +1148,6 @@ class TestPrologMQI(ParametrizedTestCase):
                 with newServer.create_thread() as prologThread:
                     result = prologThread.query("true")
                     self.assertEqual(result, True)
-
 
     def test_python_classes(self):
         # Using a thread without starting it should start the server
@@ -1367,12 +1364,12 @@ class TestPrologMQI(ParametrizedTestCase):
 
             with server.create_thread() as client:
                 result = client.query("member(X, [A, B, C]), put_attr(X, my_module, x).")
-                [{'$residuals': [{'args': ['A', 'my_module', 'x'], 'functor': 'put_attr'}], 'X': 'A', 'A': 'A',
+                self.assertEqual([{'$residuals': [{'args': ['A', 'my_module', 'x'], 'functor': 'put_attr'}], 'X': 'A', 'A': 'A',
                   'B': '_', 'C': '_'},
                  {'$residuals': [{'args': ['B', 'my_module', 'x'], 'functor': 'put_attr'}], 'X': 'B', 'A': '_',
                   'B': 'B', 'C': '_'},
                  {'$residuals': [{'args': ['C', 'my_module', 'x'], 'functor': 'put_attr'}], 'X': 'C', 'A': '_',
-                  'B': '_', 'C': 'C'}] == result
+                  'B': '_', 'C': 'C'}], result)
 
 
 def run_tcpip_performance_tests(suite):
@@ -1391,6 +1388,20 @@ def run_unix_domain_sockets_performance_tests(suite):
             password=None,
         )
     )
+
+
+# Returns None if there is a reason why we can't use domain sockets
+# such as: this is not Unix, the path is too long, etc.
+def unix_domain_socket_path_if_available():
+    if os.name != "nt":
+        # unixDomainSocket() should be used if non-windows
+        socketPath = mkdtemp()
+        unixDomainSocket = PrologMQI.unix_domain_socket_file(socketPath)
+        if len(unixDomainSocket) <= 104:
+            return unixDomainSocket
+
+    # Couldn't use domain sockets due to platform or path length
+    return None
 
 
 def load_tests(loader, standard_tests, pattern):
@@ -1418,31 +1429,18 @@ def load_tests(loader, standard_tests, pattern):
 
     # Run full test suite using Unix Domain Sockets when appropriate as "main" way to connect
     # Tests include both Port and Unix Domain socket tests so both are tested in either mode
-    if os.name == "nt":
-        suite.addTest(
-            ParametrizedTestCase.parametrize(
-                TestPrologMQI,
-                essentialOnly=essentialOnly,
-                failOnUnlikely=failOnUnlikely,
-                launchServer=True,
-                useUnixDomainSocket=None,
-                serverPort=None,
-                password=None,
-            )
+    unixDomainSocket = unix_domain_socket_path_if_available()
+    suite.addTest(
+        ParametrizedTestCase.parametrize(
+            TestPrologMQI,
+            essentialOnly=essentialOnly,
+            failOnUnlikely=failOnUnlikely,
+            launchServer=True,
+            useUnixDomainSocket=unixDomainSocket,
+            serverPort=None,
+            password=None,
         )
-    else:
-        socketPath = tempfile.mkdtemp()
-        suite.addTest(
-            ParametrizedTestCase.parametrize(
-                TestPrologMQI,
-                essentialOnly=essentialOnly,
-                failOnUnlikely=failOnUnlikely,
-                launchServer=True,
-                useUnixDomainSocket=PrologMQI.unix_domain_socket_file(socketPath),
-                serverPort=None,
-                password=None,
-            )
-        )
+    )
 
     return suite
 
