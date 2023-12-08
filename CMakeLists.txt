@@ -13,6 +13,10 @@ pkg_doc(mqi
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/python/swiplserver
         DESTINATION ${SWIPL_INSTALL_PREFIX}/lib)
+install_src(mqi_app
+	    FILES mqi_app.pl
+	    RENAME mqi.pl
+	    DESTINATION ${SWIPL_INSTALL_APP})
 
 find_program(PROG_PYTHON NAMES python3)
 

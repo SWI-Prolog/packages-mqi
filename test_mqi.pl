@@ -109,7 +109,8 @@ run_test_script(Script, Status, EssentialOnly) :-
                                    | System_Root
                                  ])]),
     (   debugging(test)
-    ->  copy_stream_data(Out, current_output)
+    ->  call_cleanup(copy_stream_data(Out, current_output),
+                     close(Out))
     ;   setup_call_cleanup(
             open_null_stream(Null),
             copy_stream_data(Out, Null),

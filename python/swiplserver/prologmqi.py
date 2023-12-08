@@ -22,17 +22,8 @@ Installation:
 
     1. Install SWI Prolog (www.swi-prolog.org) and ensure that "swipl" is on the system path.
     2. Either "pip install swiplserver" or copy the "swiplserver" library (the whole directory) from the "libs" directory of your SWI Prolog installation to be a subdirectory of your Python project.
-    3. Check if your SWI Prolog version includes the Machine Query Interface by launching it and typing `?- mqi_start([]).` If it can't find it, see below for how to install it.
+    3. Check if your SWI Prolog version includes the Machine Query Interface by running ``swipl mqi --help``.
 
-    If your SWI Prolog doesn't yet include the Machine Query Interface:
-
-    1. Download the `mqi.pl` file from the [GitHub repository](https://github.com/SWI-Prolog/packages-mqi/blob/master/mqi.pl).
-    2. Open an operating system command prompt and go to the directory where you downloaded `mqi.pl`.
-    3. Run the below command. On Windows the command prompt must be [run as an administrator](https://www.wikihow.com/Run-Command-Prompt-As-an-Administrator-on-Windows). On Mac or Linux, start the command with `sudo` as in `sudo swipl -s ...`.
-
-    ~~~
-    swipl -s mqi.pl -g "mqi:install_to_library('mqi.pl')" -t halt
-    ~~~
 Usage:
 
     `PrologThread` represents a thread in *Prolog* (it is not a Python thread!). A given `PrologThread` instance will always run queries on the same Prolog thread (i.e. it is single threaded within Prolog).
@@ -380,12 +371,7 @@ class PrologMQI:
                 [swiplPath]
                 + (self._prolog_path_args if self._prolog_path_args is not None else [])
                 + [
-                    "--quiet",
-                    "-g",
-                    "mqi_start",
-                    "-t",
-                    "halt",
-                    "--",
+                    "mqi",
                     "--write_connection_values=true",
                 ]
             )

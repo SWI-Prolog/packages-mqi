@@ -59,8 +59,8 @@ mqi_start([unix_domain_socket(Socket), password('a password')])
 ~~~
 When using ["Embedded Mode"](#mqi-embedded-mode) they are passed using the same name but as normal command line arguments like this:
 ~~~
-swipl --quiet -g mqi_start -t halt -- --write_connection_values=true
---password="a password" --create_unix_domain_socket=true
+swipl mqi --write_connection_values=true
+          --password="a password" --create_unix_domain_socket=true
 ~~~
 
 Note the use of quotes around values that could confuse command line
@@ -256,7 +256,7 @@ opt_help(write_output_to_file,      "Write stdout and stderr to file").
 %  To launch embedded mode:
 %
 %  ~~~
-%  swipl --quiet -g mqi_start -t halt -- --write_connection_values=true
+%  swipl mqi --write_connection_values=true
 %  ~~~
 %
 %  This will start SWI Prolog and   invoke the mqi_start/0 predicate and
@@ -270,14 +270,13 @@ opt_help(write_output_to_file,      "Write stdout and stderr to file").
 %  as spaces) should be passed with =|""|= like this:
 %
 %  ~~~
-%  swipl --quiet -g mqi_start -t halt -- --write_connection_values=true \
-%                                        --password="HGJ SOWLWW WNDSJD"
+%  swipl mqi --write_connection_values=true --password="HGJ SOWLWW"
 %  ~~~
 %
 %  For help on commandline options run
 %
 %  ~~~
-%  swipl -g mqi_start -- --help
+%  swipl mqi --help
 %  ~~~
 
 
@@ -1066,23 +1065,3 @@ unix_domain_socket_path(Created_Directory, File_Path) :-
                         set_prolog_flag(tmp_dir, Save_Tmp_Dir)
                       ),
     close(Stream).
-
-
-% Helper for installing the mqi.pl file to the right
-% library directory.
-% Call using swipl -s mqi.pl -g "mqi:install_to_library('mqi.pl')" -t halt
-install_to_library(File) :-
-    once(find_library(Path)),
-    copy_file(File, Path),
-    make.
-
-
-% Find the base library path, i.e. the one that ends in
-% "library/"
-find_library(Path) :-
-    file_alias_path(library, Path),
-    atomic_list_concat(Parts, '/', Path),
-    reverse(Parts, Parts_Reverse),
-    nth0(0, Parts_Reverse, ''),
-    nth0(1, Parts_Reverse, Library),
-    string_lower(Library, 'library').

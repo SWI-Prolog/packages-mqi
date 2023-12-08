@@ -26,19 +26,11 @@ A Python 3.x library that integrates Python with SWI Prolog using the Machine Qu
 In general, to use the Machine Query Interface with any programming language:
 
     1. Install SWI Prolog itself on the machine the application will run on.
-    2. Check if your SWI Prolog version includes the MQI by launching it and typing `?- mqi_start([]).` If it can't find it, see below for how to install it.
-    3. Ensure that the system path includes a path to the `swipl` executable from that installation.
+    2. Ensure that the system path includes a path to the `swipl` executable from that installation.
+    3. Check if your SWI Prolog version includes the MQI by running
+       `swipl mqi --help`
     4. Make sure the application (really the user that launches the application) has permission to launch the SWI Prolog process. Unless your system is unusually locked down, this should be allowed by default.  If not, you'll need to set the appropriate permissions to allow this.
     5. Install (or write!) the library you'll be using to access the MQI in your language of choice.
-
-If your SWI Prolog version doesn't yet include the MQI:
-    1. Download the =|mqi.pl|= file from the [GitHub repository](https://github.com/SWI-Prolog/packages-mqi/blob/master/mqi.pl).
-    2. Open an operating system command prompt and go to the directory where you downloaded =|mqi.pl|=.
-    3. Run the command below. On Windows the command prompt must be [run as an administrator](https://www.wikihow.com/Run-Command-Prompt-As-an-Administrator-on-Windows). On Mac or Linux, start the command with `sudo` as in ``sudo swipl -s ...``.
-
-~~~
-swipl -s mqi.pl -g "mqi:install_to_library('mqi.pl')" -t halt
-~~~
 
 ## Prolog Language Differences from the Top Level {#mqi-toplevel-differences}
 
@@ -70,8 +62,8 @@ While the query functionality of the MQI does run on a thread, it will always be
     - Normally, the SWI Prolog top level runs all user code in the context of a built-in module called "user", as does the MQI. However, the top level allows this to be changed using the module/1 predicate. This predicate has no effect when sent to the MQI.
     - Predefined streams like `user_input` are initially bound to the standard operating system I/O streams (like STDIN) and, since the Prolog process is running invisibly, will obviously not work as expected. Those streams can be changed, however, by issuing commands using system predicates as defined in the SWI Prolog documentation.
     - Every connection to the MQI runs in its own thread, so opening two connections from an application means you are running multithreaded code.
-    - The SWI Prolog top level does special handling to make residual [attributes on variables](https://www.swi-prolog.org/pldoc/man?section=attvar) print out in a human-friendly way. MQI instead returns any residuals in a special variable called `$residuals` that is added to the results.  
-    - Some Prolog extensions do not provide the full answer to a query by means of the variable bindings. The top level does extra work to find where the answers are stored and print them out. All of these extensions have an interface to get to this data as a Prolog term and users of MQI need to do this work themselves.  Examples include: [Constraint Handling Rules (CHR)](https://www.swi-prolog.org/pldoc/man?section=chr) stores constraints in global variables, [Well Founded Semantics](https://www.swi-prolog.org/pldoc/man?section=wfs-toplevel) has the notion of delayed, which is translated into a program that carries the inconsistency if there are conflicting negations, [s(CASP)](https://www.swi-prolog.org/pack/list?p=scasp) has a model and justification. 
+    - The SWI Prolog top level does special handling to make residual [attributes on variables](https://www.swi-prolog.org/pldoc/man?section=attvar) print out in a human-friendly way. MQI instead returns any residuals in a special variable called `$residuals` that is added to the results.
+    - Some Prolog extensions do not provide the full answer to a query by means of the variable bindings. The top level does extra work to find where the answers are stored and print them out. All of these extensions have an interface to get to this data as a Prolog term and users of MQI need to do this work themselves.  Examples include: [Constraint Handling Rules (CHR)](https://www.swi-prolog.org/pldoc/man?section=chr) stores constraints in global variables, [Well Founded Semantics](https://www.swi-prolog.org/pldoc/man?section=wfs-toplevel) has the notion of delayed, which is translated into a program that carries the inconsistency if there are conflicting negations, [s(CASP)](https://www.swi-prolog.org/pack/list?p=scasp) has a model and justification.
 
 A basic rule to remember is: any predicates designed to interact with or change the default behavior of the top level itself probably won't have any effect.
 
@@ -80,11 +72,11 @@ A basic rule to remember is: any predicates designed to interact with or change 
 The most common way to use the Machine Query Interface is to find a library that wraps and exposes it as a native part of another programming language such as the [Python =|swiplserver|= library](#mqi-python-installation). This section describes how to build one if there isn't yet a library for your language.  To do this, you'll need to familiarize yourself with the MQI protocol as described in the `mqi_start/1` documentation. However, to give an idea of the scope of work required, below is a typical interaction done (invisibly to the user) in the implementation of any programming language library:
 
 
-     1. Launch the SWI Prolog process using (along with any other options the user requests): =|swipl --quiet -g mqi_start -t halt -- --write_connection_values=true|=.  To work, the `swipl` Prolog executable will need to be on the path or the path needs to be specified in the command. This launches SWI Prolog, starts the MQI, and writes the chosen port and password to STDOUT.  This way of launching invokes the mqi_start/0 predicate that turns off the `int` (i.e. Interrupt/SIGINT) signal to Prolog. This is because some languages (such as Python) use that signal during debugging and it would be otherwise passed to the client Prolog process and switch it into the debugger.  See the mqi_start/0 predicate for more information on other command line options.
+     1. Launch the SWI Prolog process using (along with any other options the user requests): =|swipl mqi --write_connection_values=true|=.  To work, the `swipl` Prolog executable will need to be on the path or the path needs to be specified in the command. This launches SWI Prolog, starts the MQI, and writes the chosen port and password to STDOUT.  This way of launching invokes the mqi_start/0 predicate that turns off the `int` (i.e. Interrupt/SIGINT) signal to Prolog. This is because some languages (such as Python) use that signal during debugging and it would be otherwise passed to the client Prolog process and switch it into the debugger.  See the mqi_start/0 predicate for more information on other command line options.
      2. Read the SWI Prolog STDOUT to retrieve the TCP/IP port and password. They are sent in that order, delimited by '\n'.
 
 ~~~
-$ swipl --quiet -g mqi_start -t halt -- --write_connection_values=true
+$ swipl mqi --write_connection_values=true
 54501
 185786669688147744015809740744888120144
 ~~~
@@ -92,7 +84,7 @@ $ swipl --quiet -g mqi_start -t halt -- --write_connection_values=true
     Now the server is started. To create a connection:
 
      3. Use the language's TCP/IP sockets library to open a socket on the specified port of localhost and send the password as a message. Messages to and from the MQI are in the form =|<stringByteLength>.\n<stringBytes>.\n |= where `stringByteLength` includes the =|.\n|= from the string. For example: =|7.\nhello.\n|= More information on the [message format](#mqi-message-format) is below.
-     4. Listen on the socket for a response message of `true([[threads(Comm_Thread_ID, Goal_Thread_ID), version(Major, Minor)]])` (which will be in JSON form) indicating successful creation of the connection.  `Comm_Thread_ID` and `Goal_Thread_ID` are the internal Prolog IDs of the two threads that are used for the connection. They are sent solely for monitoring and debugging purposes. `version` was introduced in version 1.0 of the protocol to allow for detecting the protocol version and should be checked to ensure the protocol version is supported by your library. See `mqi_version/2` for more information and a version history. 
+     4. Listen on the socket for a response message of `true([[threads(Comm_Thread_ID, Goal_Thread_ID), version(Major, Minor)]])` (which will be in JSON form) indicating successful creation of the connection.  `Comm_Thread_ID` and `Goal_Thread_ID` are the internal Prolog IDs of the two threads that are used for the connection. They are sent solely for monitoring and debugging purposes. `version` was introduced in version 1.0 of the protocol to allow for detecting the protocol version and should be checked to ensure the protocol version is supported by your library. See `mqi_version/2` for more information and a version history.
 
 We can try all of this using the Unix tool `nc` (netcat) (also available for Windows) to interactively connect to the MQI. In `nc` hitting `enter` sends =|\n|= which is what the message format requires. The server responses are show indented inline.
 
