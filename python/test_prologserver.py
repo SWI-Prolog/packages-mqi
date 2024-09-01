@@ -887,6 +887,9 @@ class TestPrologMQI(ParametrizedTestCase):
 
     def test_server_options_and_shutdown(self):
         global secondsTimeoutForThreadExit
+        if self.essentialOnly:
+            print("skipped", flush=True, end=" ")
+            return
         try:
             with PrologMQI(
                 self.launchServer,
