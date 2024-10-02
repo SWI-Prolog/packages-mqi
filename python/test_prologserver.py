@@ -167,7 +167,8 @@ class TestPrologMQI(ParametrizedTestCase):
                 #     return reason
                 if (
                     prolog_name(reason) == "exception"
-                    and prolog_args(reason)[0] == "$aborted"
+                    and ( prolog_args(reason)[0] == "$aborted" or
+			  prolog_args(reason)[0] == "unwind(abort)")
                 ):
                     return "_"
                 else:

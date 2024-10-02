@@ -997,15 +997,6 @@ repeat_until_false(_).
 abortSilentExit(Thread_ID, Exception) :-
     catch(thread_signal(Thread_ID, abort), error(Exception, _), true),
     debug(mqi(protocol), "Attempting to abort thread: ~w. thread_signal_exception: ~w", [Thread_ID, Exception]).
-% Workaround SWI Prolog bug: https://github.com/SWI-Prolog/swipl-devel/issues/852 by not joining
-% The workaround just stops joining the aborted thread, so an inert record will be left if thread_property/2 is called.
-%    ,
-%    (   once((var(Exception) ; catch(thread_property(Thread_ID, status(exception('$aborted'))), error(_, _), true)))
-%    ->  (   catch(call_with_time_limit(4, thread_join(Thread_ID)), error(JoinException1, JoinException2), true),
-%            debug(mqi(protocol), "thread_join attempted because thread: ~w exit was expected, exception: ~w", [Thread_ID, error(JoinException1, JoinException2)])
-%        )
-%    ;   true
-%    ).
 
 
 % Detach a thread that exits with true or false so that it doesn't leave around a record in thread_property/2 afterwards
