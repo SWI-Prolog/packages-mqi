@@ -120,7 +120,7 @@ class TestPrologMQI(ParametrizedTestCase):
         if os.name == "nt":
             call = "TASKLIST", "/FI", "imagename eq %s" % process_name + ".exe"
             # use buildin check_output right away
-            output = subprocess.check_output(call).decode()
+            output = subprocess.check_output(call).decode(encoding='UTF-8', errors='replace')
             # check each line for process name
             count = 0
             for line in output.strip().split("\r\n"):
