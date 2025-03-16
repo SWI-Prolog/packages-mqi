@@ -323,19 +323,21 @@ quit(_) :-
 mqi_stop(Server_Thread_ID) :-
     % First shut down any matching servers to stop new connections
     forall(retract(mqi_thread(Server_Thread_ID, _, Socket)),
-        (
-            debug(mqi(protocol), "Found server: ~w", [Server_Thread_ID]),
-            catch(tcp_close_socket(Socket), Socket_Exception, true),
-            abortSilentExit(Server_Thread_ID, Server_Thread_Exception),
-            debug(mqi(protocol), "Stopped server thread: ~w, socket_close_exception(~w), stop_thread_exception(~w)", [Server_Thread_ID, Socket_Exception, Server_Thread_Exception])
-        )),
+           (   debug(mqi(protocol), "Found server: ~w", [Server_Thread_ID]),
+               catch(tcp_close_socket(Socket), _0Socket_Exception, true),
+               abortSilentExit(Server_Thread_ID, _0Server_Thread_Exception),
+               debug(mqi(protocol), "Stopped server thread: ~w, \c
+                                     socket_close_exception(~w), stop_thread_exception(~w)",
+                     [Server_Thread_ID, _0Socket_Exception, _0Server_Thread_Exception])
+           )),
     forall(retract(mqi_worker_threads(Server_Thread_ID, Communication_Thread_ID, Goal_Thread_ID)),
-        (
-            abortSilentExit(Communication_Thread_ID, CommunicationException),
-            debug(mqi(protocol), "Stopped server: ~w communication thread: ~w, exception(~w)", [Server_Thread_ID, Communication_Thread_ID, CommunicationException]),
-            abortSilentExit(Goal_Thread_ID, Goal_Exception),
-            debug(mqi(protocol), "Stopped server: ~w goal thread: ~w, exception(~w)", [Server_Thread_ID, Goal_Thread_ID, Goal_Exception])
-        )).
+           (   abortSilentExit(Communication_Thread_ID, _0CommunicationException),
+               debug(mqi(protocol), "Stopped server: ~w communication thread: ~w, exception(~w)",
+                     [Server_Thread_ID, Communication_Thread_ID, _0CommunicationException]),
+               abortSilentExit(Goal_Thread_ID, _0Goal_Exception),
+               debug(mqi(protocol), "Stopped server: ~w goal thread: ~w, exception(~w)",
+                     [Server_Thread_ID, Goal_Thread_ID, _0Goal_Exception])
+           )).
 
 
 start_server_thread(Run_Server_On_Thread, Server_Thread_ID, Server_Goal, Unix_Domain_Socket_Path, Unix_Domain_Socket_Path_And_File) :-
@@ -519,22 +521,22 @@ run_cancellable_goal(Mutex_ID, Goal) :-
 %   otherwise just exit the session
 communication_thread(Password, Socket, Encoding, Server_Thread_ID, Goal_Thread_ID, Query_Timeout, Exit_Main_On_Failure) :-
     thread_self(Self_ID),
-    (   (
-            catch(communication_thread_listen(Password, Socket, Encoding, Server_Thread_ID, Goal_Thread_ID, Query_Timeout), error(Serve_Exception1, Serve_Exception2), true),
-            debug(mqi(protocol), "Session finished. Communication thread exception: ~w", [error(Serve_Exception1, Serve_Exception2)]),
-            abortSilentExit(Goal_Thread_ID, _),
-            retractall(mqi_worker_threads(Server_Thread_ID, Self_ID, Goal_Thread_ID))
-        )
+    (   catch(communication_thread_listen(Password, Socket, Encoding, Server_Thread_ID, Goal_Thread_ID, Query_Timeout),
+              error(Serve_Exception1, _0Serve_Exception2),
+              true),
+        debug(mqi(protocol), "Session finished. Communication thread exception: ~w",
+              [error(Serve_Exception1, _0Serve_Exception2)]),
+        abortSilentExit(Goal_Thread_ID, _),
+        retractall(mqi_worker_threads(Server_Thread_ID, Self_ID, Goal_Thread_ID))
     ->  Halt = (nonvar(Serve_Exception1), Exit_Main_On_Failure)
     ;   Halt = true
     ),
     (   Halt
-    ->  (   debug(mqi(protocol), "Ending session and halting Prolog server due to thread ~w: exception(~w)", [Self_ID, error(Serve_Exception1, Serve_Exception2)]),
-            quit(_)
-        )
-    ;   (   debug(mqi(protocol), "Ending session ~w", [Self_ID]),
-            catch(tcp_close_socket(Socket), error(_, _), true)
-        )
+    ->  debug(mqi(protocol), "Ending session and halting Prolog server due to thread ~w: exception(~w)",
+              [Self_ID, error(Serve_Exception1, _0Serve_Exception2)]),
+        quit(_)
+    ;   debug(mqi(protocol), "Ending session ~w", [Self_ID]),
+        catch(tcp_close_socket(Socket), error(_, _), true)
     ).
 
 
