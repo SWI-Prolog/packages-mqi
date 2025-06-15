@@ -22,4 +22,5 @@ unix-socket = ["dep:nix"]
 password-gen = ["dep:uuid"] # Feature to enable password generation
 
 [dev-dependencies]
+env_logger = "0.11"
 tempfile = "3.19.1" 

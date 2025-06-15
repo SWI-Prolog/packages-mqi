@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::io::{self, BufRead, BufReader};
+use std::io::{self, BufRead, BufReader, Read};
 use std::thread;
 use log::{
     debug, error, info, warn
@@ -217,7 +217,7 @@ impl PrologServer {
         debug!("Spawning: {:?} {}", prolog_executable, args_for_debug.join(" "));
         command.stdin(Stdio::null()); // Don't need stdin
         command.stdout(Stdio::piped());
-        command.stderr(Stdio::piped());
+        command.stderr(Stdio::null()); // Redirect stderr to null to prevent potential deadlocks
 
         let mut child = command.spawn().map_err(|e| {
             if e.kind() == io::ErrorKind::NotFound {
@@ -228,34 +228,83 @@ impl PrologServer {
         })?;
 
         let child_stdout = child.stdout.take().ok_or_else(|| PrologError::LaunchError("Failed to capture swipl stdout".to_string()))?;
-        let child_stderr = child.stderr.take().ok_or_else(|| PrologError::LaunchError("Failed to capture swipl stderr".to_string()))?;
         let process_id = child.id();
         info!("SWI-Prolog process started (PID: {}).", process_id);
         self.process = Some(child); // Store child handle
 
+        // === DIAGNOSTIC: Add a small delay before reading stdout ===
+        debug!("[START] Waiting 100ms before reading stdout...");
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        debug!("[START] Delay finished. Proceeding to read stdout...");
+        // ==========================================================
+
         // --- Read Connection Details from Stdout ---
+        debug!("[START] Reading connection details from stdout...");
         let mut reader = BufReader::new(child_stdout);
-        let mut line1 = String::new();
-        let mut line2 = String::new();
-
-        if reader.read_line(&mut line1)? == 0 {
-             return Err(PrologError::LaunchError("SWI-Prolog stdout closed unexpectedly (failed to read connection line 1)".to_string()));
+        // --- Read first line (port or UDS path) robustly ---
+        let mut line1_bytes = Vec::new();
+        let mut raw_line1_bytes = Vec::new();
+        let mut byte_buf = [0; 1];
+        loop {
+            reader.read_exact(&mut byte_buf)?;
+            raw_line1_bytes.push(byte_buf[0]);
+            if byte_buf[0] == b'\n' { // Stop at the first newline
+                if let Some(&b'\r') = raw_line1_bytes.get(raw_line1_bytes.len().saturating_sub(2)) {
+                    // If ended with CRLF, pop both
+                    line1_bytes.truncate(line1_bytes.len().saturating_sub(1)); 
+                }
+                break;
+            } else if byte_buf[0] != b'\r' { // Add byte if it's not CR
+                line1_bytes.push(byte_buf[0]);
+            }
         }
-        if reader.read_line(&mut line2)? == 0 {
-             return Err(PrologError::LaunchError("SWI-Prolog stdout closed unexpectedly (failed to read connection line 2)".to_string()));
-        }
+        let line1 = String::from_utf8(line1_bytes).map_err(|e| {
+            error!("[START] Line 1 bytes are not valid UTF-8: {:02X?}, error: {}", raw_line1_bytes, e);
+            PrologError::Io(io::Error::new(io::ErrorKind::InvalidData, e))
+        })?;
+        debug!("[START] Raw bytes line 1: {:02X?}", raw_line1_bytes);
+        debug!("[START] Parsed line 1: '{}'", line1);
 
-        let conn_detail = line1.trim();
-        let password_from_prolog = line2.trim();
+        // --- Read second line (password) robustly ---
+        let mut line2_bytes = Vec::new();
+        let mut raw_line2_bytes = Vec::new();
+        loop {
+            reader.read_exact(&mut byte_buf)?;
+            raw_line2_bytes.push(byte_buf[0]);
+             if byte_buf[0] == b'\n' { // Stop at the first newline
+                if let Some(&b'\r') = raw_line2_bytes.get(raw_line2_bytes.len().saturating_sub(2)) {
+                    // If ended with CRLF, pop both
+                    line2_bytes.truncate(line2_bytes.len().saturating_sub(1));
+                }
+                break;
+            } else if byte_buf[0] != b'\r' { // Add byte if it's not CR
+                line2_bytes.push(byte_buf[0]);
+            }
+        }
+        let line2 = String::from_utf8(line2_bytes).map_err(|e| {
+             error!("[START] Line 2 bytes are not valid UTF-8: {:02X?}, error: {}", raw_line2_bytes, e);
+             PrologError::Io(io::Error::new(io::ErrorKind::InvalidData, e))
+        })?;
+        debug!("[START] Raw bytes line 2: {:02X?}", raw_line2_bytes);
+        debug!("[START] Parsed line 2: '{}'", line2);
+
+        // Original trim logic might still be useful if prolog adds extra whitespace within the line?
+        // let conn_detail = line1.trim();
+        // let password_from_prolog = line2.trim();
+        // For now, use the direct parsed strings
+        let conn_detail = line1;
+        let password_from_prolog = line2;
+
+        debug!("[START] Final password read: '{}'", password_from_prolog);
 
         // Verify/Store Connection Details
         if self.effective_uds_path.is_some() {
             // Expect UDS path on first line
-            if self.effective_uds_path.as_ref().unwrap().to_str() != Some(conn_detail) && create_uds {
+            if self.effective_uds_path.as_ref().unwrap().to_str() != Some(conn_detail.as_str()) && create_uds {
                  warn!("Generated UDS path mismatch: expected {:?}, got {}", self.effective_uds_path.as_ref().unwrap(), conn_detail);
                  // Overwrite with what Prolog actually created/used if we generated it
-                 self.effective_uds_path = Some(PathBuf::from(conn_detail));
-            } else if self.effective_uds_path.as_ref().unwrap().to_str() != Some(conn_detail) {
+                 self.effective_uds_path = Some(PathBuf::from(conn_detail.clone()));
+            } else if self.effective_uds_path.as_ref().unwrap().to_str() != Some(conn_detail.as_str()) {
                  return Err(PrologError::LaunchError(format!("UDS path mismatch: expected {:?}, got {}", self.effective_uds_path.as_ref().unwrap(), conn_detail)));
             }
             debug!("Using UDS path: {}", conn_detail);
@@ -274,7 +323,7 @@ impl PrologServer {
 
         // Verify/Store Password
         if let Some(expected_password) = self.effective_password.as_ref() {
-            if expected_password != password_from_prolog {
+            if *expected_password != password_from_prolog {
                  // Should only happen if user provided password differs from what prolog output (which shouldn't happen)
                   return Err(PrologError::LaunchError(format!("Password mismatch: expected {}, got {}", expected_password, password_from_prolog)));
             }
@@ -288,7 +337,10 @@ impl PrologServer {
         }
         debug!("Confirmed password.");
 
-        // --- Spawn Output Readers ---
+        // --- Spawn Output Readers --- 
+        // Stderr reader is no longer needed as stderr is redirected to null
+        // Temporarily comment out to debug hang
+        /*
         // Spawn thread for stderr
         thread::Builder::new().name(format!("swipl-{}-stderr", process_id)).spawn(move || {
             let stderr_reader = BufReader::new(child_stderr);
@@ -300,7 +352,7 @@ impl PrologServer {
             }
             debug!("Prolog stderr thread finished for PID {}", process_id);
         }).map_err(|e| PrologError::LaunchError(format!("Failed to spawn stderr reader thread: {}", e)))?;
-
+        */
         // Spawn thread for remaining stdout (after connection details)
         thread::Builder::new().name(format!("swipl-{}-stdout", process_id)).spawn(move || {
             // The reader now owns the stdout handle

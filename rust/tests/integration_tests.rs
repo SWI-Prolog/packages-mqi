@@ -1,7 +1,7 @@
 // Integration tests for the swipl-rs library
 
 use swipl_rs::*;
-use swipl_rs::server::ServerConfig;
+use swipl_rs::server::{ServerConfig, PrologServer};
 use swipl_rs::types::{QueryResult, Solution, PrologCompound, PrologTerm, prolog_term_to_string};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -10,6 +10,7 @@ use std::time::Duration;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::env; // Add this import
+use env_logger; // Add this import
 
 // --- Test Setup ---
 
@@ -22,7 +23,10 @@ fn setup() {
         // Example using simple_logger (add to Cargo.toml dev-dependencies if used)
         // simple_logger::SimpleLogger::new().init().unwrap_or_else(|e| eprintln!("Failed to init logger: {}", e));
         // For now, just print a message
-        println!("Test setup: Logging (stubbed)");
+        // println!("Test setup: Logging (stubbed)");
+        // Initialize env_logger
+        env_logger::builder().is_test(true).try_init().unwrap_or_else(|e| eprintln!("Failed to initialize env_logger: {}", e));
+        println!("Test setup: env_logger initialized.");
     });
 }
 
@@ -77,17 +81,25 @@ fn test_server_start_stop() {
 fn test_basic_connect_and_query() {
     setup();
     let config = default_test_config();
+    println!("Creating PrologServer...");
     let mut server = PrologServer::new(config).expect("Failed to create server config");
     // Connect implicitly calls start()
+    println!("Attempting server.connect()...");
     let mut session = server.connect().expect("Failed to connect session");
+    println!("server.connect() successful.");
     let result = session.query("atom(a)", None).expect("Query failed");
+    println!("First query successful.");
     assert_success(result, true);
 
     let result_fail = session.query("fail", None).expect("Query failed");
+    println!("Second query successful.");
     assert_success(result_fail, false);
 
+    println!("Closing session...");
     session.close().expect("Failed to close session");
+    println!("Stopping server...");
     server.stop(false).expect("Failed to stop server");
+    println!("Test finished.");
 }
 
 #[test]

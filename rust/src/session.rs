@@ -1,4 +1,4 @@
-use std::io::{self, BufRead, BufReader, Read, Write};
+use std::io::{self, BufReader, Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::sync::{Arc, Mutex};
 
@@ -351,44 +351,144 @@ impl Drop for PrologSession {
 
 /// Sends a properly formatted message (length prefix + message) to the MQI server.
 fn send_message<W: Write + ?Sized>(stream: &mut W, message: &str) -> Result<(), PrologError> {
+    debug!("[SEND] Sending message text: {}", message);
     let bytes = message.as_bytes();
     let len = bytes.len();
     let len_str = format!("{}.\n", len);
+    let len_bytes = len_str.as_bytes();
 
+    debug!("[SEND] Length prefix bytes ({}) Hex: {:02X?}", len_str.trim_end(), len_bytes);
     // Write length prefix first
-    stream.write_all(len_str.as_bytes())?;
+    stream.write_all(len_bytes)?;
 
+    debug!("[SEND] Message body bytes ({}) Hex: {:02X?}", message, bytes);
     // Then write the actual message
     stream.write_all(bytes)?;
     stream.flush()?; // Ensure the message is sent immediately
+    debug!("[SEND] Message sent successfully.");
     Ok(())
 }
 
 /// Receives a properly formatted message (length prefix + message) from the MQI server.
 fn receive_message<R: Read + ?Sized>(stream: &mut R) -> Result<String, PrologError> {
-    // Use BufReader for efficient line reading
+    debug!("[RECV] Attempting to receive message...");
+    // Use BufReader for potentially better performance, but read byte-by-byte for delimiter handling
     let mut reader = BufReader::new(stream);
-    let mut len_str = String::new();
+    let mut len_bytes = Vec::new();
+    let mut raw_len_prefix_bytes = Vec::new(); // For logging raw bytes read
+    let mut byte = [0; 1];
 
-    // Read until the ".\n" delimiter for the length
-    reader.read_line(&mut len_str)?;
+    // Read bytes until '.' is found
+    debug!("[RECV] Reading length prefix...");
+    loop {
+        match reader.read_exact(&mut byte) {
+            Ok(_) => raw_len_prefix_bytes.push(byte[0]),
+            Err(e) => {
+                error!("[RECV] Error reading length byte: {}. Raw prefix read so far: {:02X?}", e, raw_len_prefix_bytes);
+                return Err(e.into());
+            }
+        }
+        
+        if byte[0] == b'.' {
+            break;
+        } else if byte[0].is_ascii_digit() {
+            len_bytes.push(byte[0]);
+        } else if byte[0] == b'\r' { 
+            // Ignore potential CR in length part (unlikely but possible)
+            continue; 
+        } else if byte[0] == b'\n' { 
+            // Ignore potential LF in length part (unlikely but possible)
+            continue; 
+        } else {
+             error!("[RECV] Invalid char in length prefix: {}. Raw prefix read: {:02X?}", byte[0], raw_len_prefix_bytes);
+             return Err(PrologError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Invalid character in message length prefix: {}", byte[0]),
+            )));
+        }
+    }
+    debug!("[RECV] Raw length prefix bytes read (including '.'): {:02X?}", raw_len_prefix_bytes);
 
-    // Parse the length string (remove ".\n")
-    let len = len_str
-        .trim_end_matches(".\n")
-        .parse::<usize>()
-        .map_err(|_| PrologError::Io(std::io::Error::new(
+    // Consume the newline character(s) after the '.'
+    let mut nl_bytes_read = Vec::new();
+    match reader.read_exact(&mut byte) {
+        Ok(_) => nl_bytes_read.push(byte[0]),
+        Err(e) => {
+            error!("[RECV] Error reading byte after '.': {}. Raw prefix read: {:02X?}", e, raw_len_prefix_bytes);
+            return Err(e.into());
+        }
+    }
+
+    if byte[0] == b'\r' { // Handle potential CRLF
+         // If it was CR, try to read the LF
+         match reader.read_exact(&mut byte) {
+            Ok(_) => nl_bytes_read.push(byte[0]),
+            Err(ref e) if e.kind() == io::ErrorKind::UnexpectedEof => { 
+                // EOF after CR is acceptable if previous read consumed LF implicitly
+                debug!("[RECV] EOF encountered after CR, assuming implicit LF consumed.");
+            },
+            Err(e) => {
+                error!("[RECV] Error reading potential LF after CR: {}. NL bytes read: {:02X?}", e, nl_bytes_read);
+                return Err(e.into()); // Other errors are fatal
+            }
+         }
+
+         if nl_bytes_read.len() > 1 && nl_bytes_read[1] != b'\n' {
+             // If we read something but it wasn't LF, that's unexpected
+             error!("[RECV] Expected LF after CR, got: {:02X?}. NL bytes read: {:02X?}", nl_bytes_read.get(1), nl_bytes_read);
+             return Err(PrologError::Io(std::io::Error::new(
+                 std::io::ErrorKind::InvalidData,
+                 "Expected LF after CR in length delimiter",
+             )));
+         }
+    } else if byte[0] != b'\n' {
+        // If it wasn't CR, it must be LF
+        error!("[RECV] Expected LF after '.', got: {:02X?}. NL bytes read: {:02X?}", byte[0], nl_bytes_read);
+        return Err(PrologError::Io(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
-            "Failed to parse message length",
-        )))?;
+            "Expected LF after length delimiter",
+        )));
+    }
+    debug!("[RECV] Newline bytes consumed after '.': {:02X?}", nl_bytes_read);
+
+    // Parse the length string
+    let len_str = String::from_utf8(len_bytes.clone()).map_err(|_| {
+        error!("[RECV] Length prefix bytes are not valid UTF-8: {:02X?}", len_bytes);
+        PrologError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Length prefix is not valid UTF-8",
+        ))
+    })?;
+    let len = len_str.parse::<usize>().map_err(|_| {
+        error!("[RECV] Failed to parse message length from string: '{}' (bytes: {:02X?})", len_str, len_bytes);
+        PrologError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Failed to parse message length: '{}'", len_str),
+        ))
+    })?;
+    debug!("[RECV] Parsed message body length: {}", len);
 
     // Read the exact number of bytes for the message payload
+    debug!("[RECV] Reading message body ({} bytes)...", len);
     let mut message_buf = vec![0; len];
-    reader.read_exact(&mut message_buf)?;
+    match reader.read_exact(&mut message_buf) {
+         Ok(_) => debug!("[RECV] Successfully read {} bytes for message body.", len),
+         Err(e) => {
+             error!("[RECV] Error reading message body (expected {} bytes): {}", len, e);
+             return Err(e.into());
+         }
+    }
+    debug!("[RECV] Message body bytes read: {:02X?}", message_buf);
 
     // Convert bytes to String (assuming UTF-8)
-    String::from_utf8(message_buf).map_err(|e| PrologError::Io(std::io::Error::new(
-        std::io::ErrorKind::InvalidData,
-        format!("Failed to decode UTF-8 message: {}", e),
-    )))
+    let message_str = String::from_utf8(message_buf).map_err(|e| {
+        error!("[RECV] Failed to decode message body as UTF-8: {}", e);
+        PrologError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Failed to decode UTF-8 message: {}", e),
+        ))
+    })?;
+    debug!("[RECV] Decoded message string: {}", message_str);
+    debug!("[RECV] Message received successfully.");
+    Ok(message_str)
 } 
