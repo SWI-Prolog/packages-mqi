@@ -13,6 +13,10 @@ pub enum PrologError {
     #[error("JSON error: {0}")]
     Json(#[from] serde_json::Error),
 
+    /// Configuration error (e.g., missing required setting).
+    #[error("Configuration error: {0}")]
+    ConfigError(String),
+
     /// Error launching the SWI-Prolog process.
     #[error("Failed to launch SWI-Prolog: {0}")]
     LaunchError(String),
@@ -62,4 +66,4 @@ pub enum PrologError {
     /// Invalid state or configuration.
     #[error("Invalid state: {0}")]
     InvalidState(String),
-} 
+}

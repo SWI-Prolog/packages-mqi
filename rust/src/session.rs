@@ -1,18 +1,18 @@
 use std::io::{self, BufRead, BufReader, Read, Write};
-use std::net::{Shutdown, TcpStream, ToSocketAddrs};
-use std::path::PathBuf;
+use std::net::{Shutdown, TcpStream};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use log::{debug, error, trace, warn, info};
 use serde_json::Value;
 
 use crate::error::PrologError;
-use crate::types::{PrologTerm, QueryResult};
+use crate::types::QueryResult;
 
 // Use feature flags for Unix Domain Sockets
 #[cfg(feature = "unix-socket")]
 use std::os::unix::net::UnixStream;
+#[cfg(feature = "unix-socket")]
+use std::path::PathBuf;
 
 /// Represents the type of connection address.
 #[derive(Debug, Clone)]
@@ -37,18 +37,18 @@ pub struct PrologSession {
 // Custom trait to unify socket operations needed
 trait ReadWriteShutdown: Read + Write + Send + Sync + std::fmt::Debug {
     fn shutdown(&self, how: Shutdown) -> io::Result<()>;
-    fn set_read_timeout(&self, dur: Option<Duration>) -> io::Result<()>;
-    fn set_write_timeout(&self, dur: Option<Duration>) -> io::Result<()>;
+    fn set_read_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()>;
+    fn set_write_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()>;
 }
 
 impl ReadWriteShutdown for TcpStream {
     fn shutdown(&self, how: Shutdown) -> io::Result<()> {
         TcpStream::shutdown(self, how)
     }
-    fn set_read_timeout(&self, dur: Option<Duration>) -> io::Result<()> {
+    fn set_read_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
         TcpStream::set_read_timeout(self, dur)
     }
-     fn set_write_timeout(&self, dur: Option<Duration>) -> io::Result<()> {
+     fn set_write_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
         TcpStream::set_write_timeout(self, dur)
     }
 }
@@ -58,49 +58,45 @@ impl ReadWriteShutdown for UnixStream {
     fn shutdown(&self, how: Shutdown) -> io::Result<()> {
         UnixStream::shutdown(self, how)
     }
-    fn set_read_timeout(&self, dur: Option<Duration>) -> io::Result<()> {
+    fn set_read_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
         UnixStream::set_read_timeout(self, dur)
     }
-     fn set_write_timeout(&self, dur: Option<Duration>) -> io::Result<()> {
+     fn set_write_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
         UnixStream::set_write_timeout(self, dur)
     }
 }
 
 impl PrologSession {
-    /// Connects to the MQI server at the specified address.
-    pub(crate) fn connect(
+    /// Connects to a running SWI-Prolog MQI server.
+    pub fn connect(
         addr: ConnectionAddr,
         password: &str,
         connection_failed_flag: Arc<Mutex<bool>>,
     ) -> Result<Self, PrologError> {
-        debug!("Connecting to Prolog MQI at {:?}...", addr);
-
-        let stream: Box<dyn ReadWriteShutdown> = match addr {
+        // Create the stream based on the address type
+        let mut stream: Box<dyn ReadWriteShutdown> = match addr {
             ConnectionAddr::Tcp(port) => {
-                // Add connection retry logic like in Python?
-                let tcp_stream = TcpStream::connect(("127.0.0.1", port))?;
-                tcp_stream.set_nodelay(true).map_err(|e| warn!("Failed to set TCP_NODELAY: {}", e)).ok(); // Log error but don't fail connection
-                // TODO: Consider setting TCP keepalive options?
+                let addr_str = format!("127.0.0.1:{}", port);
+                let tcp_stream = TcpStream::connect(addr_str)?;
+                // Set read/write timeouts?
+                // tcp_stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+                // tcp_stream.set_write_timeout(Some(Duration::from_secs(5)))?;
                 Box::new(tcp_stream)
             }
             #[cfg(feature = "unix-socket")]
-            ConnectionAddr::Uds(ref path) => { // Use ref path here
+            ConnectionAddr::Uds(path) => {
                 let unix_stream = UnixStream::connect(path)?;
                 Box::new(unix_stream)
             }
-            #[cfg(not(feature = "unix-socket"))]
-             _ => return Err(PrologError::FeatureNotEnabled("unix-socket".to_string())),
         };
 
-        // Send password immediately
-        // The password string from Prolog already includes the trailing .\n
-        // The send_message helper expects a plain string without trailing .
-        // Let's adjust send_message or handle it here.
-        // For now, assuming send_message adds the .
+        // Send password for authentication
         send_message(&mut *stream, password)?;
 
-        // Receive initial response
+        // Receive and parse the initial response
         let response_str = receive_message(&mut *stream)?;
+        trace!("Connect response raw: {}", response_str);
+
         // Handle potential trailing newline from Prolog's term_to_json_string
         let response_json: Value = serde_json::from_str(response_str.trim_end())?;
 
@@ -124,7 +120,7 @@ impl PrologSession {
 
         let (comm_id, goal_id, major, minor) = Self::parse_initial_true_args(&response_json)?;
 
-        let mut session = Self {
+        let session = Self {
             stream,
             connection_failed: connection_failed_flag,
             communication_thread_id: comm_id,

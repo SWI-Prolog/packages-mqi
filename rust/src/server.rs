@@ -4,9 +4,8 @@ use std::sync::{Arc, Mutex};
 use std::io::{self, BufRead, BufReader};
 use std::thread;
 use log::{
-    debug, error, info, trace, warn
+    debug, error, info, warn
 };
-use std::time::Duration;
 
 #[cfg(feature = "password-gen")]
 use uuid::Uuid;
@@ -125,35 +124,41 @@ impl PrologServer {
             return Ok(());
         }
 
+        // Ensure process isn't already running
         if self.process.is_some() {
-            info!("SWI-Prolog process already started.");
-            return Ok(());
+            return Err(PrologError::InvalidState("Server process already started".to_string()));
         }
 
         info!("Starting SWI-Prolog MQI process...");
 
-        let swipl_executable = self.config.prolog_path.clone().unwrap_or_else(|| PathBuf::from("swipl"));
-        let mut args = vec!["mqi".to_string(), "--write_connection_values=true".to_string()];
+        // Validate and get the Prolog executable path
+        let prolog_executable = self.config.prolog_path.as_ref().ok_or_else(|| {
+            PrologError::ConfigError("Path to SWI-Prolog executable (prolog_path) not configured".to_string())
+        })?;
+
+        let mut command = Command::new(prolog_executable);
+
+        // Set arguments for running MQI
+        command.arg("mqi");
 
         // --- Determine Effective Connection Details & Args ---
-        let mut generated_password = false;
+        let generated_password = false;
         if self.effective_password.is_none() {
              #[cfg(feature = "password-gen")]
              {
                 self.effective_password = Some(Uuid::new_v4().to_string());
-                generated_password = true;
                 debug!("Generated temporary password.");
              }
              #[cfg(not(feature = "password-gen"))]
              return Err(PrologError::FeatureNotEnabled("Password generation requires the 'password-gen' feature, or provide a password explicitly.".to_string()));
         }
-        args.push(format!("--password={}", self.effective_password.as_ref().unwrap()));
+        command.arg(format!("--password={}", self.effective_password.as_ref().unwrap()));
 
-        let mut create_uds = false;
-        if let Some(uds_path_config) = &self.config.unix_domain_socket {
+        let create_uds = false;
+        if let Some(_uds_path_config) = &self.config.unix_domain_socket {
              #[cfg(all(unix, feature="unix-socket"))]
              {
-                if uds_path_config.as_os_str().is_empty() {
+                if _uds_path_config.as_os_str().is_empty() {
                     // Generate UDS path
                     let template = "/tmp/swiplrs-XXXXXX"; // Template for mkdtemp
                     let temp_dir_path = mkdtemp(template).map_err(|e| PrologError::Io(io::Error::new(io::ErrorKind::Other, format!("Failed to create temp dir for UDS: {}", e))))?;
@@ -173,12 +178,12 @@ impl PrologServer {
                     self.effective_uds_path = Some(full_socket_path);
                     self.generated_uds_dir = Some(temp_dir_path); // Store dir for cleanup
                     create_uds = true;
-                    args.push("--create_unix_domain_socket=true".to_string());
+                    command.arg("--create_unix_domain_socket=true");
                     debug!("Generated UDS path: {:?}", self.effective_uds_path.as_ref().unwrap());
                 } else {
                     // Use provided path
-                    self.effective_uds_path = Some(uds_path_config.clone());
-                    args.push(format!("--unix_domain_socket={}", create_prolog_path(uds_path_config)?));
+                    self.effective_uds_path = Some(_uds_path_config.clone());
+                    command.arg(format!("--unix_domain_socket={}", create_prolog_path(_uds_path_config)?));
                 }
              }
              #[cfg(not(all(unix, feature="unix-socket")))]
@@ -186,29 +191,30 @@ impl PrologServer {
         } else {
             // Using TCP
             if let Some(port) = self.config.port {
-                args.push(format!("--port={}", port));
+                command.arg(format!("--port={}", port));
             }
             // If port is None, Prolog will pick one.
         }
 
         // --- Add Other Config Args ---
         if let Some(count) = self.config.pending_connection_count {
-            args.push(format!("--pending_connections={}", count));
+            command.arg(format!("--pending_connections={}", count));
         }
         if let Some(timeout) = self.config.query_timeout_seconds {
-            args.push(format!("--query_timeout={}", timeout));
+            command.arg(format!("--query_timeout={}", timeout));
         }
         if let Some(file) = &self.config.output_file_name {
-            args.push(format!("--write_output_to_file={}", create_prolog_path(file)?));
+            command.arg(format!("--write_output_to_file={}", create_prolog_path(file)?));
         }
         if let Some(extra_args) = &self.config.prolog_path_args {
-            args.extend_from_slice(extra_args);
+            command.args(extra_args);
         }
 
         // --- Spawn Process ---
-        debug!("Spawning: {:?} {}", swipl_executable, args.join(" "));
-        let mut command = Command::new(swipl_executable);
-        command.args(&args);
+        let args_for_debug: Vec<String> = command.get_args()
+                                                  .map(|s| s.to_string_lossy().into_owned())
+                                                  .collect();
+        debug!("Spawning: {:?} {}", prolog_executable, args_for_debug.join(" "));
         command.stdin(Stdio::null()); // Don't need stdin
         command.stdout(Stdio::piped());
         command.stderr(Stdio::piped());
@@ -348,9 +354,9 @@ impl PrologServer {
         let password = self.effective_password.clone().ok_or_else(|| PrologError::InvalidState("Password not available for connection".to_string()))?;
 
         let address = self.effective_uds_path.as_ref()
-            .map(|p| {
+            .map(|_p| {
                  #[cfg(feature = "unix-socket")]
-                 { Ok(ConnectionAddr::Uds(p.clone())) }
+                 { Ok(ConnectionAddr::Uds(_p.clone())) }
                  #[cfg(not(feature = "unix-socket"))]
                  { Err(PrologError::FeatureNotEnabled("unix-socket".to_string())) }
             })
@@ -425,61 +431,17 @@ impl PrologServer {
         }
 
         // Clean up generated UDS directory *after* process is confirmed stopped
-        if let Some(dir_path) = uds_dir_to_clean {
+        if let Some(_dir_path) = uds_dir_to_clean {
              #[cfg(all(unix, feature="unix-socket"))]
              {
-                debug!("Cleaning up generated UDS directory: {:?}", dir_path);
-                if let Err(e) = fs::remove_dir_all(&dir_path) {
-                    warn!("Failed to remove generated UDS directory {:?}: {}", dir_path, e);
+                debug!("Cleaning up generated UDS directory: {:?}", _dir_path);
+                if let Err(e) = fs::remove_dir_all(&_dir_path) {
+                    warn!("Failed to remove generated UDS directory {:?}: {}", _dir_path, e);
                 }
              }
         }
 
         result
-    }
-
-    fn spawn_prolog_process(&mut self) -> Result<Child, PrologError> {
-        let mut command = Command::new(&self.config.prolog_path);
-
-        // ... existing code ...
-
-        // Set up MQI arguments
-        command.arg("mqi");
-
-        // Store traces locally before mutable borrow for connect
-        let traces = self.config.mqi_traces.clone();
-
-        // Start the process *before* connecting to potentially use its output
-        debug!("Spawning SWI-Prolog process: {:?}", command);
-        let child = command.spawn().map_err(|e| PrologError::ProcessStartFailed(e.to_string()))?;
-        self.process = Some(child);
-
-        // Give Prolog a moment to start up and bind the socket/port
-        // TODO: Make this more robust, e.g., by checking stderr/stdout or attempting connection in a loop
-        std::thread::sleep(Duration::from_millis(500));
-
-        // Now connect to the SWI-Prolog MQI server
-        match self.connect() { // Use the connection details we just established
-            Ok(mut temp_session) => {
-                // If traces were specified, send the debug command
-                if let Some(t) = traces {
-                    let trace_goal = format!("debug(mqi({})).", t);
-                    match temp_session.run_query(&trace_goal) {
-                        Ok(_) => debug!("Enabled MQI tracing: {}", t),
-                        Err(e) => warn!("Failed to enable MQI tracing '{}': {}", t, e),
-                    }
-                }
-                self.process = Some(child);
-            }
-            Err(e) => {
-                error!("Failed to connect to spawned MQI server: {}", e);
-                // Attempt to clean up the child process if connection fails
-                self.stop(true).ok(); // Ignore error during cleanup
-                return Err(e); // Return the connection error
-            }
-        }
-
-        Ok(self.process.as_ref().unwrap().id() as _) // Assuming process is Some here
     }
 }
 
@@ -493,12 +455,12 @@ impl Drop for PrologServer {
             }
         }
          // Ensure cleanup happens even if stop wasn't called explicitly
-         if let Some(dir_path) = self.generated_uds_dir.take() {
+         if let Some(_dir_path) = self.generated_uds_dir.take() {
              #[cfg(all(unix, feature="unix-socket"))]
              {
-                 warn!("Cleaning up generated UDS directory {:?} during drop", dir_path);
-                 if let Err(e) = fs::remove_dir_all(&dir_path) {
-                    error!("Failed to remove generated UDS directory {:?} during drop: {}", dir_path, e);
+                 warn!("Cleaning up generated UDS directory {:?} during drop", _dir_path);
+                 if let Err(e) = fs::remove_dir_all(&_dir_path) {
+                    error!("Failed to remove generated UDS directory {:?} during drop: {}", _dir_path, e);
                 }
              }
         }
