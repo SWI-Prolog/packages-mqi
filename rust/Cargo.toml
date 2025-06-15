@@ -16,7 +16,8 @@ nix = { version = "0.29", features = ["socket", "uio", "fs"], optional = true } 
 uuid = { version = "1.10.0", features = ["v4"], optional = true } # For generating passwords
 
 [features]
-default = []
+default = ["tcp-ip", "password-gen"] # Default features: TCP/IP communication and password generation
+tcp-ip = []         # Enable TCP/IP socket communication
 unix-socket = ["dep:nix"]
 password-gen = ["dep:uuid"] # Feature to enable password generation
 

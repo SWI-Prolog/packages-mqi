@@ -30,11 +30,17 @@ fn setup() {
 fn default_test_config() -> ServerConfig {
     // Check for environment variable specifying the SWI-Prolog path
     match env::var("SWIPL_PATH") {
-        Ok(path) => ServerConfig {
-            prolog_path: Some(path.into()),
-            ..Default::default()
+        Ok(path) => {
+            println!("Using SWIPL_PATH from environment: {}", path);
+            ServerConfig {
+                prolog_path: Some(path.into()), // Convert String to PathBuf
+                ..Default::default()
+            }
         },
-        Err(_) => ServerConfig::default(), // Assumes swipl in PATH, generates password
+        Err(_) => {
+            println!("SWIPL_PATH not found in environment, using default.");
+            ServerConfig::default() // Assumes swipl in PATH, generates password
+        },
     }
 }
 
@@ -808,37 +814,63 @@ fn test_goal_expansion_dict() {
 #[test]
 fn test_explicit_port() {
     setup();
-    let port = 42424; // Choose an unlikely port
-    let config = ServerConfig { port: Some(port), ..Default::default() };
+    let port = 8088; // Choose an arbitrary port
+    let config = match env::var("SWIPL_PATH") {
+        Ok(path) => ServerConfig {
+            prolog_path: Some(path.into()),
+            port: Some(port),
+            ..Default::default()
+        },
+        Err(_) => ServerConfig {
+            port: Some(port),
+            ..Default::default()
+        },
+    };
     let mut server = PrologServer::new(config).unwrap();
-    server.start().unwrap();
-    {
-        let mut session = server.connect().unwrap();
-        assert_success(session.query("true", None).unwrap(), true);
-    }
+    let mut session = server.connect().unwrap();
+    assert_success(session.query("true", None).unwrap(), true);
+    session.close().unwrap();
     server.stop(false).unwrap();
 }
 
 #[test]
 fn test_explicit_password() {
     setup();
-    let password = "my_secret_password".to_string();
-    let config = ServerConfig { password: Some(password.clone()), ..Default::default() };
-    let mut server = PrologServer::new(config).unwrap();
-    server.start().unwrap();
-    {
-        let mut session = server.connect().unwrap(); // connect uses the server's effective password
-        assert_success(session.query("true", None).unwrap(), true);
-    }
-    server.stop(false).unwrap();
+    let password = "mytestpassword".to_string();
+    let config = match env::var("SWIPL_PATH") {
+        Ok(path) => ServerConfig {
+            prolog_path: Some(path.into()),
+            password: Some(password.clone()),
+            ..Default::default()
+        },
+        Err(_) => ServerConfig {
+            password: Some(password.clone()),
+            ..Default::default()
+        },
+    };
 
-    // Test connecting with wrong password
-    let config_fail = ServerConfig { password: Some("wrong".to_string()), ..Default::default() };
+    let mut server = PrologServer::new(config).unwrap();
+    let mut session = server.connect().unwrap();
+    assert_success(session.query("true", None).unwrap(), true);
+
+    // Test connection failure with wrong password
+    let config_fail = match env::var("SWIPL_PATH") {
+        Ok(path) => ServerConfig {
+            prolog_path: Some(path.into()),
+            password: Some("wrong".to_string()),
+            ..Default::default() // Create config_fail with default port etc.
+        },
+        Err(_) => ServerConfig {
+            password: Some("wrong".to_string()),
+            ..Default::default() // Create config_fail with default port etc.
+        },
+    };
     let mut server_fail = PrologServer::new(config_fail).unwrap();
-    server_fail.start().unwrap();
     let connect_result = server_fail.connect();
-    assert!(matches!(connect_result, Err(PrologError::AuthenticationFailed)));
-    server_fail.stop(true).unwrap(); // Kill as connection failed
+    assert!(matches!(connect_result, Err(PrologError::AuthenticationFailed)), "Expected AuthenticationFailed");
+
+    session.close().unwrap();
+    server.stop(false).unwrap();
 }
 
 #[test]
@@ -890,13 +922,31 @@ fn test_generate_uds() {
 #[test]
 fn test_default_query_timeout_option() {
     setup();
-    let config = ServerConfig { query_timeout_seconds: Some(0.5), ..Default::default() };
+    let config = match env::var("SWIPL_PATH") {
+        Ok(path) => ServerConfig {
+            prolog_path: Some(path.into()),
+            query_timeout_seconds: Some(0.5),
+            ..Default::default()
+        },
+        Err(_) => ServerConfig {
+            query_timeout_seconds: Some(0.5),
+            ..Default::default()
+        },
+    };
     let mut server = PrologServer::new(config).unwrap();
     let mut session = server.connect().unwrap();
 
-    // Query should use the default timeout from the server config
-    let result = session.query("sleep(2)", None);
-    assert!(matches!(result, Err(PrologError::Timeout)), "Expected timeout using server default");
+    // Query that exceeds the default timeout
+    let result = session.query("sleep(1)", None);
+    assert!(matches!(result, Err(PrologError::Timeout)), "Expected Timeout error");
+
+    // Query within the timeout should work
+    let result_ok = session.query("sleep(0.1)", None).unwrap();
+    assert_success(result_ok, true);
+
+    // Override timeout should work
+    let result_override = session.query("sleep(1)", Some(2.0)).unwrap();
+    assert_success(result_override, true);
 
     server.stop(false).unwrap();
 }
@@ -905,50 +955,64 @@ fn test_default_query_timeout_option() {
 
 #[test]
 fn test_output_file_option() {
-    // Note: Verification requires reading the created file.
     setup();
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let output_file = temp_dir.path().join("prolog_output.log");
+    let output_file = temp_dir.path().join("prolog_output.log").to_str().unwrap().to_string();
 
-    let config = ServerConfig { output_file_name: Some(output_file.clone()), ..Default::default() };
+    let config = match env::var("SWIPL_PATH") {
+        Ok(path) => ServerConfig {
+            prolog_path: Some(path.into()),
+            output_file_name: Some(output_file.clone().into()),
+            ..Default::default()
+        },
+        Err(_) => ServerConfig {
+            output_file_name: Some(output_file.clone().into()),
+            ..Default::default()
+        },
+    };
     let mut server = PrologServer::new(config).unwrap();
-    server.start().unwrap(); // Start should succeed
-    {
-        let mut session = server.connect().unwrap();
-        session.query("write(\'hello from prolog\'), nl", None).unwrap();
-    }
+    let mut session = server.connect().unwrap();
+
+    let test_message = "Hello from Prolog test!";
+    session.query(&format!("writeln('{}')", test_message), None).unwrap();
+    session.close().unwrap();
     server.stop(false).unwrap();
 
-    assert!(output_file.exists(), "Output file was not created");
+    // Check if the file exists and contains the message
     let content = std::fs::read_to_string(&output_file).expect("Failed to read output file");
-    assert!(content.contains("hello from prolog"), "Output file does not contain expected content");
+    assert!(content.contains(test_message), "Output file does not contain the test message");
 }
 
 #[test]
 fn test_mqi_traces_option() {
-    // Note: Verification requires reading the output file or capturing logs.
     setup();
     let temp_dir = tempfile::tempdir().expect("Failed to create temp dir");
-    let output_file = temp_dir.path().join("prolog_trace_output.log");
+    let trace_file = temp_dir.path().join("mqi_trace.log").to_str().unwrap().to_string();
 
-    let config = ServerConfig {
-        output_file_name: Some(output_file.clone()),
-        mqi_traces: Some("protocol".to_string()), // Enable protocol traces
-        ..Default::default()
+    let config = match env::var("SWIPL_PATH") {
+        Ok(path) => ServerConfig {
+            prolog_path: Some(path.into()),
+            output_file_name: Some(trace_file.clone().into()),
+            mqi_traces: Some("protocol".to_string()), // Enable protocol traces
+            ..Default::default()
+        },
+        Err(_) => ServerConfig {
+            output_file_name: Some(trace_file.clone().into()),
+            mqi_traces: Some("protocol".to_string()), // Enable protocol traces
+            ..Default::default()
+        },
     };
+
     let mut server = PrologServer::new(config).unwrap();
-    // Start implicitly connects to set traces
-    server.start().unwrap();
-    {
-        let mut session = server.connect().unwrap();
-        session.query("true", None).unwrap(); // Run a query to generate trace messages
-    }
+    let mut session = server.connect().unwrap();
+    session.query("true", None).unwrap();
+    session.close().unwrap();
     server.stop(false).unwrap();
 
-    assert!(output_file.exists(), "Output file was not created for traces");
-    let content = std::fs::read_to_string(&output_file).expect("Failed to read trace output file");
-    // Check for expected trace patterns
-    assert!(content.contains("% MQI Protocol:"), "Output file does not contain expected MQI trace content");
+    // Check if the trace file exists and contains some expected trace patterns
+    let content = std::fs::read_to_string(&trace_file).expect("Failed to read trace file");
+    assert!(content.contains("% Started server on thread:"), "Trace file missing server start message");
+    assert!(content.contains("% Command: run_async"), "Trace file missing command trace");
 }
 
 
