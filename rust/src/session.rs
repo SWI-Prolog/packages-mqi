@@ -398,22 +398,37 @@ fn receive_message<R: Read + ?Sized>(stream: &mut R) -> Result<String, PrologErr
             }
         }
         
-        if byte[0] == b'.' {
-            break;
-        } else if byte[0].is_ascii_digit() {
-            len_bytes.push(byte[0]);
-        } else if byte[0] == b'\r' { 
-            // Ignore potential CR in length part (unlikely but possible)
-            continue; 
-        } else if byte[0] == b'\n' { 
-            // Ignore potential LF in length part (unlikely but possible)
-            continue; 
+        let current_byte = byte[0];
+        if current_byte == b'.' {
+            // If we haven't read any digits yet, this might be a lone heartbeat.
+            if len_bytes.is_empty() {
+                trace!("[RECV] Read single '.' - likely heartbeat. Discarding and continuing.");
+                raw_len_prefix_bytes.clear(); // Reset raw log for next attempt
+                continue; // Read the next byte
+            } else {
+                // Found the end of the length prefix
+                break; 
+            }
+        } else if current_byte.is_ascii_digit() {
+            len_bytes.push(current_byte);
+        } else if current_byte == b'\r' || current_byte == b'\n' {
+            // Ignore potential CR/LF in length part (unlikely but possible)
+            trace!("[RECV] Ignored CR/LF ({:02X?}) during length prefix read.", current_byte);
+            continue;
         } else {
-             error!("[RECV] Invalid char in length prefix: {}. Raw prefix read: {:02X?}", byte[0], raw_len_prefix_bytes);
-             return Err(PrologError::Io(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("Invalid character in message length prefix: {}", byte[0]),
-            )));
+             // Received unexpected non-digit, non-delimiter byte.
+             // Could be a heartbeat if len_bytes is empty, or an error.
+             if len_bytes.is_empty() {
+                 trace!("[RECV] Read non-digit/non-delimiter byte ({:02X?}) before length - discarding as likely heartbeat/noise.", current_byte);
+                 raw_len_prefix_bytes.clear(); // Reset raw log
+                 continue; // Read the next byte
+             } else {
+                error!("[RECV] Invalid char in length prefix: {}. Raw prefix read: {:02X?}", current_byte, raw_len_prefix_bytes);
+                return Err(PrologError::Io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("Invalid character in message length prefix: {}", current_byte),
+                )));
+             }
         }
     }
     debug!("[RECV] Raw length prefix bytes read (including '.'): {:02X?}", raw_len_prefix_bytes);
