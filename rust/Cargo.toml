@@ -24,4 +24,28 @@ password-gen = ["dep:uuid"] # Feature to enable password generation
 
 [dev-dependencies]
 env_logger = "0.11"
-tempfile = "3.19.1" 
+tempfile = "3.19.1"
+
+[[example]]
+name = "basic_usage"
+path = "examples/basic_usage.rs"
+
+[[example]]
+name = "async_queries"
+path = "examples/async_queries.rs"
+
+[[example]]
+name = "knowledge_base"
+path = "examples/knowledge_base.rs"
+
+[[example]]
+name = "error_handling"
+path = "examples/error_handling.rs"
+
+[[example]]
+name = "benchmark"
+path = "examples/benchmark.rs"
+
+[[example]]
+name = "concurrent_sessions"
+path = "examples/concurrent_sessions.rs" 

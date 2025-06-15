@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Mutex};
-use std::io::{self, BufRead, BufReader, Read};
+use std::io::{self, BufRead, BufReader};
 use std::thread;
 use log::{
     debug, error, info, warn
@@ -10,8 +10,7 @@ use log::{
 #[cfg(feature = "password-gen")]
 use uuid::Uuid;
 
-#[cfg(all(unix, feature="unix-socket"))]
-use nix::unistd::mkdtemp;
+// mkdtemp is not available in nix 0.29, we'll use tempfile crate instead
 #[cfg(all(unix, feature="unix-socket"))]
 use std::fs;
 #[cfg(all(unix, feature="unix-socket"))]
@@ -24,6 +23,7 @@ use crate::session::{PrologSession, ConnectionAddr};
 #[derive(Debug, Clone)]
 pub struct ServerConfig {
     pub launch_mqi: bool,
+    pub host: Option<String>, // Host address for TCP connections (default: "127.0.0.1")
     pub port: Option<u16>,
     pub password: Option<String>,
     // If Some(path) and path is empty, generate UDS path
@@ -40,6 +40,7 @@ impl Default for ServerConfig {
     fn default() -> Self {
         ServerConfig {
             launch_mqi: true,
+            host: None, // Will default to "127.0.0.1" when None
             port: None,
             password: None, // Will be generated if None and launch_mqi is true and feature enabled
             unix_domain_socket: None,
@@ -47,7 +48,7 @@ impl Default for ServerConfig {
             pending_connection_count: None, // Use Prolog's default (5)
             output_file_name: None,
             mqi_traces: None,
-            prolog_path: None, // Assumes 'swipl' is in PATH
+            prolog_path: Some(PathBuf::from("swipl")), // Default to 'swipl' in PATH
             prolog_path_args: None,
         }
     }
@@ -61,6 +62,7 @@ pub struct PrologServer {
     // Need Arc<Mutex> for thread safety if accessed by session
     connection_failed: Arc<Mutex<bool>>,
     // Details needed by session to connect
+    effective_host: String,
     effective_port: Option<u16>,
     effective_uds_path: Option<PathBuf>,
     effective_password: Option<String>,
@@ -105,6 +107,7 @@ impl PrologServer {
         }
 
         Ok(Self {
+            effective_host: config.host.clone().unwrap_or_else(|| "127.0.0.1".to_string()),
             effective_port: config.port,
             effective_uds_path: config.unix_domain_socket.clone(), // Clone path if provided
             effective_password: config.password.clone(),
@@ -139,7 +142,18 @@ impl PrologServer {
         let mut command = Command::new(prolog_executable);
 
         // Set arguments for running MQI
-        command.arg("mqi");
+        // Check if we're in development (mqi.pl exists locally)
+        let local_mqi = std::path::Path::new("../mqi.pl");
+        if local_mqi.exists() {
+            command.arg("-g");
+            command.arg("use_module('../mqi'), mqi_start");
+            command.arg("-t");
+            command.arg("halt");
+            command.arg("--");  // Separator for MQI arguments
+        } else {
+            // Production mode - MQI installed as package
+            command.arg("mqi");
+        }
 
         // --- Determine Effective Connection Details & Args ---
         let generated_password = false;
@@ -154,22 +168,33 @@ impl PrologServer {
         }
         command.arg(format!("--password={}", self.effective_password.as_ref().unwrap()));
 
-        let create_uds = false;
+        let mut create_uds = false;
         if let Some(_uds_path_config) = &self.config.unix_domain_socket {
              #[cfg(all(unix, feature="unix-socket"))]
              {
+                // Unix domain socket path length limit (conservative to ensure portability)
+                const UNIX_SOCKET_PATH_MAX_LEN: usize = 80;
+                
                 if _uds_path_config.as_os_str().is_empty() {
                     // Generate UDS path
-                    let template = "/tmp/swiplrs-XXXXXX"; // Template for mkdtemp
-                    let temp_dir_path = mkdtemp(template).map_err(|e| PrologError::Io(io::Error::new(io::ErrorKind::Other, format!("Failed to create temp dir for UDS: {}", e))))?;
+                    #[cfg(feature = "password-gen")]
+                    let unique_id = Uuid::new_v4().simple().to_string();
+                    #[cfg(not(feature = "password-gen"))]
+                    let unique_id = format!("{}", std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_nanos());
+                    
+                    let temp_dir_path = std::env::temp_dir().join(format!("swiplrs-{}", unique_id));
+                    fs::create_dir_all(&temp_dir_path)?;
                     // Set permissions to 700 (rwx------)
                     fs::set_permissions(&temp_dir_path, fs::Permissions::from_mode(0o700))?;
 
-                    let socket_file_name = format!("swiplrs-{}.sock", Uuid::new_v4().to_simple());
+                    let socket_file_name = "socket.sock";
                     let full_socket_path = temp_dir_path.join(socket_file_name);
 
-                    // Check length constraint (92 bytes including null for portability, be conservative)
-                    if full_socket_path.as_os_str().len() > 80 {
+                    // Check length constraint (conservative for portability)
+                    if full_socket_path.as_os_str().len() > UNIX_SOCKET_PATH_MAX_LEN {
                         // Clean up directory before erroring
                         let _ = fs::remove_dir_all(&temp_dir_path);
                         return Err(PrologError::InvalidState("Generated UDS path is too long".to_string()));
@@ -234,11 +259,6 @@ impl PrologServer {
         info!("SWI-Prolog process started (PID: {}).", process_id);
         self.process = Some(child); // Store child handle
 
-        // === DIAGNOSTIC: Add a small delay before reading stdout ===
-        debug!("[START] Waiting 100ms before reading stdout...");
-        std::thread::sleep(std::time::Duration::from_millis(100));
-        debug!("[START] Delay finished. Proceeding to read stdout...");
-        // ==========================================================
 
         // --- Read Connection Details from Stdout ---
         debug!("[START] Reading connection details from stdout...");
@@ -302,10 +322,10 @@ impl PrologServer {
         
         // Spawn thread for remaining stdout (after connection details)
         // Pass the handle to the thread (it consumes the BufReader anyway)
-        let stdout_reader_thread = thread::Builder::new().name(format!("swipl-{}-stdout", process_id)).spawn(move || {
+        let _stdout_reader_thread = thread::Builder::new().name(format!("swipl-{}-stdout", process_id)).spawn(move || {
             // Use the reader passed from the main thread, which is already
             // positioned after the first two lines.
-            let mut thread_reader = reader; 
+            let thread_reader = reader; 
             for line in thread_reader.lines() {
                  match line {
                     Ok(l) => info!("Prolog stdout [{}]: {}", process_id, l),
@@ -321,6 +341,9 @@ impl PrologServer {
             debug!("Prolog stdout thread finished for PID {}", process_id);
         }).map_err(|e| PrologError::LaunchError(format!("Failed to spawn stdout reader thread: {}", e)))?;
 
+        // Add a small delay to ensure MQI is fully started
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        
         // --- Optional: Set MQI Traces ---
         // Clone traces *before* the mutable borrow for connect
         let traces_to_set = self.config.mqi_traces.clone();
@@ -364,11 +387,11 @@ impl PrologServer {
         let address = self.effective_uds_path.as_ref()
             .map(|_p| {
                  #[cfg(feature = "unix-socket")]
-                 { Ok(ConnectionAddr::Uds(_p.clone())) }
+                 { Ok::<ConnectionAddr, PrologError>(ConnectionAddr::Uds(_p.clone())) }
                  #[cfg(not(feature = "unix-socket"))]
                  { Err(PrologError::FeatureNotEnabled("unix-socket".to_string())) }
             })
-            .or_else(|| self.effective_port.map(|p| Ok(ConnectionAddr::Tcp(p))))
+            .or_else(|| self.effective_port.map(|p| Ok(ConnectionAddr::Tcp(self.effective_host.clone(), p))))
             .ok_or_else(|| PrologError::InvalidState("No valid connection address (port/UDS) available".to_string()))??;
 
         PrologSession::connect(address, &_password, self.connection_failed.clone())

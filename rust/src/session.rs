@@ -17,7 +17,7 @@ use std::path::PathBuf;
 /// Represents the type of connection address.
 #[derive(Debug, Clone)]
 pub enum ConnectionAddr {
-    Tcp(u16), // Port number
+    Tcp(String, u16), // Host and port number
     #[cfg(feature = "unix-socket")]
     Uds(PathBuf), // Path to socket file
 }
@@ -28,8 +28,8 @@ pub struct PrologSession {
     // Use a trait object or enum to handle different stream types
     stream: Box<dyn ReadWriteShutdown>, // Custom trait for common socket ops
     connection_failed: Arc<Mutex<bool>>, // Shared flag with PrologServer
-    communication_thread_id: Option<String>, // Placeholder
-    goal_thread_id: Option<String>,          // Placeholder
+    _communication_thread_id: Option<String>, // Placeholder
+    _goal_thread_id: Option<String>,          // Placeholder
     server_protocol_major: u32,
     server_protocol_minor: u32,
 }
@@ -37,18 +37,18 @@ pub struct PrologSession {
 // Custom trait to unify socket operations needed
 trait ReadWriteShutdown: Read + Write + Send + Sync + std::fmt::Debug {
     fn shutdown(&self, how: Shutdown) -> io::Result<()>;
-    fn set_read_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()>;
-    fn set_write_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()>;
+    fn _set_read_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()>;
+    fn _set_write_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()>;
 }
 
 impl ReadWriteShutdown for TcpStream {
     fn shutdown(&self, how: Shutdown) -> io::Result<()> {
         TcpStream::shutdown(self, how)
     }
-    fn set_read_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
+    fn _set_read_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
         TcpStream::set_read_timeout(self, dur)
     }
-     fn set_write_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
+     fn _set_write_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
         TcpStream::set_write_timeout(self, dur)
     }
 }
@@ -58,10 +58,10 @@ impl ReadWriteShutdown for UnixStream {
     fn shutdown(&self, how: Shutdown) -> io::Result<()> {
         UnixStream::shutdown(self, how)
     }
-    fn set_read_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
+    fn _set_read_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
         UnixStream::set_read_timeout(self, dur)
     }
-     fn set_write_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
+     fn _set_write_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
         UnixStream::set_write_timeout(self, dur)
     }
 }
@@ -75,8 +75,8 @@ impl PrologSession {
     ) -> Result<Self, PrologError> {
         // Create the stream based on the address type
         let mut stream: Box<dyn ReadWriteShutdown> = match addr {
-            ConnectionAddr::Tcp(port) => {
-                let addr_str = format!("127.0.0.1:{}", port);
+            ConnectionAddr::Tcp(host, port) => {
+                let addr_str = format!("{}:{}", host, port);
                 let tcp_stream = TcpStream::connect(addr_str)?;
                 // Set read/write timeouts?
                 // tcp_stream.set_read_timeout(Some(Duration::from_secs(5)))?;
@@ -125,8 +125,8 @@ impl PrologSession {
         let session = Self {
             stream,
             connection_failed: connection_failed_flag,
-            communication_thread_id: comm_id,
-            goal_thread_id: goal_id,
+            _communication_thread_id: comm_id,
+            _goal_thread_id: goal_id,
             server_protocol_major: major,
             server_protocol_minor: minor,
         };
@@ -219,8 +219,9 @@ impl PrologSession {
          let command = format!("run_async(({}), {}, {}).", goal, timeout_str, find_all_str);
          send_message(&mut *self.stream, &command)?;
          match self.handle_response()? {
-             // Expect simple true acknowledgment
-             QueryResult::Success(true) => Ok(()),
+             // run_async returns true([[[]]]) when successful - one empty solution
+             QueryResult::Solutions(ref sols) if sols.len() == 1 && sols[0].is_empty() => Ok(()),
+             QueryResult::Success(true) => Ok(()), // For compatibility
              _ => Err(PrologError::InvalidState("Unexpected response from run_async".to_string())),
          }
     }
@@ -243,6 +244,7 @@ impl PrologSession {
         send_message(&mut *self.stream, command)?;
          match self.handle_response()? {
              QueryResult::Success(true) => Ok(()),
+             QueryResult::Solutions(ref sols) if sols.len() == 1 && sols[0].is_empty() => Ok(()),
              _ => Err(PrologError::InvalidState("Unexpected response from cancel_async".to_string())),
          }
     }
@@ -318,7 +320,14 @@ impl PrologSession {
                  match args {
                      Some(ex_arg) if ex_arg.len() == 1 => {
                          let ex_term = ex_arg[0].clone();
-                         let kind = ex_term.as_str().unwrap_or("complex_exception").to_string();
+                         let kind = if let Some(simple_str) = ex_term.as_str() {
+                             simple_str.to_string()
+                         } else if let Some(functor) = ex_term.get("functor").and_then(|f| f.as_str()) {
+                             // For compound exceptions like syntax_error(operator_expected)
+                             functor.to_string()
+                         } else {
+                             "complex_exception".to_string()
+                         };
                          error!("Received Prolog exception: {}", kind);
 
                          // Map specific Prolog errors to specific Rust errors

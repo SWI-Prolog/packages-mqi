@@ -41,7 +41,12 @@ pub enum QueryResult {
 
 impl QueryResult {
     /// Parses the solutions array from a `true([[...], [...]])` response.
-    pub(crate) fn parse_solutions(solutions_json: &[Value]) -> Result<Self, PrologError> {
+    #[doc(hidden)]
+    pub fn parse_solutions(solutions_json: &[Value]) -> Result<Self, PrologError> {
+        Self::parse_solutions_internal(solutions_json)
+    }
+    
+    fn parse_solutions_internal(solutions_json: &[Value]) -> Result<Self, PrologError> {
         let mut solutions = Vec::new();
         for solution_json in solutions_json {
             if let Some(assignments_json) = solution_json.as_array() {
