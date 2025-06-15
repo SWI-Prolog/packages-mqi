@@ -75,15 +75,16 @@ impl PrologSession {
     ) -> Result<Self, PrologError> {
         debug!("Connecting to Prolog MQI at {:?}...", addr);
 
-        let mut stream: Box<dyn ReadWriteShutdown> = match addr {
+        let stream: Box<dyn ReadWriteShutdown> = match addr {
             ConnectionAddr::Tcp(port) => {
+                // Add connection retry logic like in Python?
                 let tcp_stream = TcpStream::connect(("127.0.0.1", port))?;
-                // Set timeouts? Maybe keepalive?
+                // TODO: Consider setting TCP_NODELAY or keepalive options?
                 Box::new(tcp_stream)
             }
             #[cfg(feature = "unix-socket")]
-            ConnectionAddr::Uds(path) => {
-                let unix_stream = UnixStream::connect(&path)?;
+            ConnectionAddr::Uds(ref path) => { // Use ref path here
+                let unix_stream = UnixStream::connect(path)?;
                 Box::new(unix_stream)
             }
             #[cfg(not(feature = "unix-socket"))]
@@ -91,17 +92,36 @@ impl PrologSession {
         };
 
         // Send password immediately
+        // The password string from Prolog already includes the trailing .\n
+        // The send_message helper expects a plain string without trailing .
+        // Let's adjust send_message or handle it here.
+        // For now, assuming send_message adds the .
         send_message(&mut *stream, password)?;
 
         // Receive initial response
         let response_str = receive_message(&mut *stream)?;
-        let response_json: Value = serde_json::from_str(&response_str)?; // Handle potential trailing newline from term_to_json_string
+        // Handle potential trailing newline from Prolog's term_to_json_string
+        let response_json: Value = serde_json::from_str(response_str.trim_end())?;
 
-        debug!("Initial response: {}", response_json);
+        debug!("Initial response JSON: {}", response_json);
 
         // Parse initial response (true([[threads(CommId, GoalId), version(Major, Minor)]]))
-        // Or just true([]) if older version
-        let (comm_id, goal_id, major, minor) = Self::parse_initial_response(&response_json)?;
+        // Or just true([]) if older version or password failed.
+        if !response_json.get("functor").and_then(|f| f.as_str()).map_or(false, |f| f == "true") {
+            // Check if it's an exception, specifically password mismatch
+            if response_json.get("functor").and_then(|f| f.as_str()) == Some("exception") {
+                 if let Some(args) = response_json.get("args").and_then(|a| a.as_array()) {
+                     if let Some(kind) = args.get(0).and_then(|k| k.as_str()) {
+                         if kind == "password_mismatch" {
+                             return Err(PrologError::AuthenticationFailed);
+                         }
+                     }
+                 }
+            }
+            return Err(PrologError::AuthenticationFailed); // Assume auth failure if not true(...)
+        }
+
+        let (comm_id, goal_id, major, minor) = Self::parse_initial_true_args(&response_json)?;
 
         let mut session = Self {
             stream,
@@ -118,35 +138,44 @@ impl PrologSession {
         Ok(session)
     }
 
-    fn parse_initial_response(json: &Value) -> Result<(Option<String>, Option<String>, u32, u32), PrologError> {
+    // Renamed from parse_initial_response to be more specific
+    fn parse_initial_true_args(json: &Value) -> Result<(Option<String>, Option<String>, u32, u32), PrologError> {
+        // Expecting true([[threads(C, G), version(Ma, Mi)]]) or true([[]])
          if let Some(args) = json.get("args").and_then(|a| a.as_array()) {
-             if let Some(inner_list) = args.get(0).and_then(|l| l.as_array()) {
-                 if let Some(first_element) = inner_list.get(0) {
-                     // Check for threads/2
-                     if let Some(comm_args) = first_element.get("args").and_then(|a| a.as_array()) {
-                         if first_element.get("functor").and_then(|f| f.as_str()) == Some("threads") && comm_args.len() == 2 {
-                             let comm_id = comm_args[0].as_str().map(String::from);
-                             let goal_id = comm_args[1].as_str().map(String::from);
-
-                             // Check for version/2 (optional)
-                             if let Some(second_element) = inner_list.get(1) {
-                                  if let Some(version_args) = second_element.get("args").and_then(|a| a.as_array()) {
-                                       if second_element.get("functor").and_then(|f| f.as_str()) == Some("version") && version_args.len() == 2 {
-                                            let major = version_args[0].as_u64().ok_or_else(|| PrologError::InvalidState("Invalid version major number".into()))? as u32;
-                                            let minor = version_args[1].as_u64().ok_or_else(|| PrologError::InvalidState("Invalid version minor number".into()))? as u32;
-                                            return Ok((comm_id, goal_id, major, minor));
-                                       }
-                                  }
-                             }
-                             // No version info, assume 0.0
-                             return Ok((comm_id, goal_id, 0, 0));
-                         }
+            if args.len() == 1 {
+                if let Some(outer_list) = args[0].as_array() {
+                     if outer_list.is_empty() { // true([[]]) case
+                         return Ok((None, None, 0, 0)); // Pre-version info MQI
                      }
-                 }
-             }
+                    if let Some(inner_list) = outer_list[0].as_array() {
+                        if let Some(first_element) = inner_list.get(0) {
+                            // Check for threads/2
+                            if let Some(comm_args) = first_element.get("args").and_then(|a| a.as_array()) {
+                                if first_element.get("functor").and_then(|f| f.as_str()) == Some("threads") && comm_args.len() == 2 {
+                                    let comm_id = comm_args[0].as_str().map(String::from);
+                                    let goal_id = comm_args[1].as_str().map(String::from);
+
+                                    // Check for version/2 (optional)
+                                    if let Some(second_element) = inner_list.get(1) {
+                                        if let Some(version_args) = second_element.get("args").and_then(|a| a.as_array()) {
+                                            if second_element.get("functor").and_then(|f| f.as_str()) == Some("version") && version_args.len() == 2 {
+                                                let major = version_args[0].as_u64().ok_or_else(|| PrologError::InvalidState("Invalid version major number".into()))? as u32;
+                                                let minor = version_args[1].as_u64().ok_or_else(|| PrologError::InvalidState("Invalid version minor number".into()))? as u32;
+                                                return Ok((comm_id, goal_id, major, minor));
+                                            }
+                                        }
+                                    }
+                                    // No version info, assume 0.0
+                                    return Ok((comm_id, goal_id, 0, 0));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
          }
-         // If structure doesn't match, assume authentication failed
-         Err(PrologError::AuthenticationFailed)
+         // If structure doesn't match, assume something went wrong post-authentication
+         Err(PrologError::InvalidState("Unexpected structure for initial 'true' response".into()))
     }
 
      fn check_protocol_version(&self) -> Result<(), PrologError> {
@@ -325,7 +354,8 @@ impl Drop for PrologSession {
 
 /// Sends a message according to the MQI protocol.
 fn send_message<W: Write>(stream: &mut W, message: &str) -> Result<(), PrologError> {
-    let msg = message.trim_end_matches('.').to_string() + ".\n";
+    // Ensure message ends with exactly one '.\n'
+    let msg = message.trim().trim_end_matches('.').to_string() + ".\n";
     trace!("Sending: {}", msg.trim_end());
     let msg_bytes = msg.as_bytes(); // MQI v1.0 uses UTF-8 byte length
     let header = format!("{}.\n", msg_bytes.len());
@@ -341,29 +371,46 @@ fn receive_message<R: Read>(stream: &mut R) -> Result<String, PrologError> {
     let mut size_buf = Vec::new();
     let mut byte_buf = [0u8; 1];
     let mut heartbeat_count = 0;
+    let mut saw_dot = false;
 
-    // Read the size header
+    // Read the size header: <digits>.<newline>
     loop {
+        // TODO: Add read timeout logic here?
         stream.read_exact(&mut byte_buf)?;
         match byte_buf[0] {
-            b'\n' => break, // End of size header
-            b'.' => {
-                if size_buf.is_empty() {
-                     heartbeat_count += 1; // Ignore leading heartbeats
-                     trace!("Received heartbeat");
-                }
-                // Ignore dots within the number itself? MQI spec says header is <num>.<newline>
+            b'\n' => {
+                if saw_dot { break; } // Correct termination
+                else { return Err(PrologError::InvalidState("Unexpected newline in size header before dot".into())); }
             },
-            digit if digit.is_ascii_digit() => size_buf.push(digit),
+            b'.' => {
+                if size_buf.is_empty() && !saw_dot { // Only treat leading dots as heartbeats
+                     heartbeat_count += 1;
+                     trace!("Received heartbeat");
+                } else if !saw_dot { // First dot after digits
+                    saw_dot = true;
+                } else { // Multiple dots - error
+                    return Err(PrologError::InvalidState("Multiple dots found in size header".into()));
+                }
+            },
+            digit if digit.is_ascii_digit() => {
+                if saw_dot {
+                    return Err(PrologError::InvalidState("Digit received after dot in size header".into()));
+                }
+                size_buf.push(digit)
+            },
             other => return Err(PrologError::InvalidState(format!("Unexpected character in size header: {}", other as char))),
         }
+    }
+
+    if !saw_dot {
+        return Err(PrologError::InvalidState("Size header did not contain a dot separator".into()));
     }
 
     let size_str = String::from_utf8(size_buf)
         .map_err(|_| PrologError::InvalidState("Invalid UTF-8 in size header".into()))?;
     let size: usize = size_str
         .parse()
-        .map_err(|_| PrologError::InvalidState(format!("Invalid number in size header: {}", size_str)))?;
+        .map_err(|_| PrologError::InvalidState(format!("Invalid number in size header: \"{}\"", size_str)))?;
 
     trace!("Expecting {} bytes (after {} heartbeats)", size, heartbeat_count);
 
@@ -374,6 +421,17 @@ fn receive_message<R: Read>(stream: &mut R) -> Result<String, PrologError> {
     let msg_str = String::from_utf8(msg_buf)
         .map_err(|_| PrologError::InvalidState("Invalid UTF-8 in message body".into()))?;
 
-    trace!("Received: {}", msg_str.trim_end());
-    Ok(msg_str)
+    // The message from Prolog includes the trailing ".\n"
+    trace!("Received raw: {:?}", msg_str);
+
+    // We should return the string *without* the trailing .
+    if !msg_str.ends_with(".\n") {
+        // This indicates a framing error or protocol violation from the server
+        warn!("Received message did not end with expected .\n");
+        // Depending on strictness, could return error or try to recover
+        // return Err(PrologError::InvalidState("Received message frame error".into()));
+    }
+
+    // Return the string content, trimming the trailing .
+    Ok(msg_str.trim_end_matches(".\n").to_string())
 } 
