@@ -91,7 +91,9 @@ impl PrologSession {
         };
 
         // Send password for authentication
-        send_message(&mut *stream, password)?;
+        // Prolog expects the password string followed by ".\n"
+        let password_with_suffix = format!("{}.\n", password);
+        send_message(&mut *stream, &password_with_suffix)?;
 
         // Receive and parse the initial response
         let response_str = receive_message(&mut *stream)?;

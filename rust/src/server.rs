@@ -197,6 +197,8 @@ impl PrologServer {
         }
 
         // --- Add Other Config Args ---
+        command.arg("--write_connection_values=true");
+
         if let Some(count) = self.config.pending_connection_count {
             command.arg(format!("--pending_connections={}", count));
         }
@@ -240,62 +242,20 @@ impl PrologServer {
 
         // --- Read Connection Details from Stdout ---
         debug!("[START] Reading connection details from stdout...");
-        let mut reader = BufReader::new(child_stdout);
-        // --- Read first line (port or UDS path) robustly ---
-        let mut line1_bytes = Vec::new();
-        let mut raw_line1_bytes = Vec::new();
-        let mut byte_buf = [0; 1];
-        loop {
-            reader.read_exact(&mut byte_buf)?;
-            raw_line1_bytes.push(byte_buf[0]);
-            if byte_buf[0] == b'\n' { // Stop at the first newline
-                if let Some(&b'\r') = raw_line1_bytes.get(raw_line1_bytes.len().saturating_sub(2)) {
-                    // If ended with CRLF, pop both
-                    line1_bytes.truncate(line1_bytes.len().saturating_sub(1)); 
-                }
-                break;
-            } else if byte_buf[0] != b'\r' { // Add byte if it's not CR
-                line1_bytes.push(byte_buf[0]);
-            }
-        }
-        let line1 = String::from_utf8(line1_bytes).map_err(|e| {
-            error!("[START] Line 1 bytes are not valid UTF-8: {:02X?}, error: {}", raw_line1_bytes, e);
-            PrologError::Io(io::Error::new(io::ErrorKind::InvalidData, e))
-        })?;
-        debug!("[START] Raw bytes line 1: {:02X?}", raw_line1_bytes);
-        debug!("[START] Parsed line 1: '{}'", line1);
+        let stdout_handle = child_stdout;
+        let mut reader = BufReader::new(stdout_handle); // Use BufReader for lines
 
-        // --- Read second line (password) robustly ---
-        let mut line2_bytes = Vec::new();
-        let mut raw_line2_bytes = Vec::new();
-        loop {
-            reader.read_exact(&mut byte_buf)?;
-            raw_line2_bytes.push(byte_buf[0]);
-             if byte_buf[0] == b'\n' { // Stop at the first newline
-                if let Some(&b'\r') = raw_line2_bytes.get(raw_line2_bytes.len().saturating_sub(2)) {
-                    // If ended with CRLF, pop both
-                    line2_bytes.truncate(line2_bytes.len().saturating_sub(1));
-                }
-                break;
-            } else if byte_buf[0] != b'\r' { // Add byte if it's not CR
-                line2_bytes.push(byte_buf[0]);
-            }
-        }
-        let line2 = String::from_utf8(line2_bytes).map_err(|e| {
-             error!("[START] Line 2 bytes are not valid UTF-8: {:02X?}, error: {}", raw_line2_bytes, e);
-             PrologError::Io(io::Error::new(io::ErrorKind::InvalidData, e))
-        })?;
-        debug!("[START] Raw bytes line 2: {:02X?}", raw_line2_bytes);
-        debug!("[START] Parsed line 2: '{}'", line2);
+        // --- Read first line (port or UDS path) --- 
+        let mut line1 = String::new();
+        reader.read_line(&mut line1)?;
+        let conn_detail = line1.trim_end().to_string(); // Trim trailing newline characters (like \n or \r\n)
+        debug!("[START] Read line 1: '{}'", conn_detail);
 
-        // Original trim logic might still be useful if prolog adds extra whitespace within the line?
-        // let conn_detail = line1.trim();
-        // let password_from_prolog = line2.trim();
-        // For now, use the direct parsed strings
-        let conn_detail = line1;
-        let password_from_prolog = line2;
-
-        debug!("[START] Final password read: '{}'", password_from_prolog);
+        // --- Read second line (password) ---
+        let mut line2 = String::new();
+        reader.read_line(&mut line2)?;
+        let password_from_prolog = line2.trim_end().to_string(); // Trim trailing newline characters
+        debug!("[START] Read line 2 (password): '{}'", password_from_prolog);
 
         // Verify/Store Connection Details
         if self.effective_uds_path.is_some() {
@@ -339,27 +299,23 @@ impl PrologServer {
 
         // --- Spawn Output Readers --- 
         // Stderr reader is no longer needed as stderr is redirected to null
-        // Temporarily comment out to debug hang
-        /*
-        // Spawn thread for stderr
-        thread::Builder::new().name(format!("swipl-{}-stderr", process_id)).spawn(move || {
-            let stderr_reader = BufReader::new(child_stderr);
-            for line in stderr_reader.lines() {
-                match line {
-                    Ok(l) => warn!("Prolog stderr [{}]: {}", process_id, l),
-                    Err(e) => error!("Error reading Prolog stderr [{}]: {}", process_id, e),
-                }
-            }
-            debug!("Prolog stderr thread finished for PID {}", process_id);
-        }).map_err(|e| PrologError::LaunchError(format!("Failed to spawn stderr reader thread: {}", e)))?;
-        */
+        
         // Spawn thread for remaining stdout (after connection details)
-        thread::Builder::new().name(format!("swipl-{}-stdout", process_id)).spawn(move || {
-            // The reader now owns the stdout handle
-            for line in reader.lines() {
+        // Pass the handle to the thread (it consumes the BufReader anyway)
+        let stdout_reader_thread = thread::Builder::new().name(format!("swipl-{}-stdout", process_id)).spawn(move || {
+            // Use the reader passed from the main thread, which is already
+            // positioned after the first two lines.
+            let mut thread_reader = reader; 
+            for line in thread_reader.lines() {
                  match line {
                     Ok(l) => info!("Prolog stdout [{}]: {}", process_id, l),
-                    Err(e) => error!("Error reading Prolog stdout [{}]: {}", process_id, e),
+                    Err(e) => {
+                         // Log errors but break if pipe seems closed
+                         error!("Error reading Prolog stdout [{}]: {}", process_id, e);
+                         if e.kind() == io::ErrorKind::BrokenPipe || e.kind() == io::ErrorKind::UnexpectedEof {
+                            break;
+                         }
+                    }
                 }
             }
             debug!("Prolog stdout thread finished for PID {}", process_id);

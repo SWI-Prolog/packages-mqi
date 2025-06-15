@@ -14,6 +14,7 @@ thiserror = "2.0.12"
 log = "0.4" # For logging Prolog output and internal library messages
 nix = { version = "0.29", features = ["socket", "uio", "fs"], optional = true } # For Unix Domain Sockets, optional
 uuid = { version = "1.10.0", features = ["v4"], optional = true } # For generating passwords
+subprocess = "0.2"
 
 [features]
 default = ["tcp-ip", "password-gen"] # Default features: TCP/IP communication and password generation
