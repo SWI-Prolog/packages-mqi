@@ -64,6 +64,7 @@ impl TestServer {
     }
     
     /// Create a new test server with custom config
+    #[allow(dead_code)]
     pub fn with_config(mut config: ServerConfig) -> Result<Self, PrologError> {
         // Ensure we use a dynamic port if not specified
         if config.port.is_none() && config.unix_domain_socket.is_none() {
@@ -165,17 +166,21 @@ impl TestTimeout {
         }
     }
     
+    #[allow(dead_code)]
     pub fn remaining(&self) -> Duration {
         self.duration.saturating_sub(self.start.elapsed())
     }
 }
 
 /// Synchronization helper for async operations
+#[allow(dead_code)]
 pub struct AsyncSync {
     ready: Arc<(Mutex<bool>, Condvar)>,
+    #[allow(dead_code)]
     done: Arc<AtomicBool>,
 }
 
+#[allow(dead_code)]
 impl AsyncSync {
     pub fn new() -> Self {
         AsyncSync {
@@ -226,6 +231,7 @@ impl AsyncSync {
 }
 
 /// Retry helper for flaky operations
+#[allow(dead_code)]
 pub fn retry_with_backoff<T, E, F>(
     mut f: F,
     max_attempts: usize,
@@ -252,6 +258,7 @@ where
 }
 
 /// Helper to run a test with a timeout
+#[allow(dead_code)]
 pub fn run_with_timeout<F, T>(f: F, timeout: Duration) -> Result<T, PrologError>
 where
     F: FnOnce() -> Result<T, PrologError> + Send + 'static,
@@ -287,6 +294,7 @@ pub fn require_swipl() {
 }
 
 /// Initialize logger for tests
+#[allow(dead_code)]
 pub fn init_logger() {
     let _ = env_logger::builder()
         .is_test(true)
@@ -294,6 +302,7 @@ pub fn init_logger() {
 }
 
 /// Assert that a query result matches expected success
+#[allow(dead_code)]
 pub fn assert_query_success(result: &swipl_rs::QueryResult, expected: bool) {
     match result {
         swipl_rs::QueryResult::Success(success) => {
@@ -307,6 +316,7 @@ pub fn assert_query_success(result: &swipl_rs::QueryResult, expected: bool) {
 }
 
 /// Assert that a query result has solutions
+#[allow(dead_code)]
 pub fn assert_has_solutions(result: &swipl_rs::QueryResult, expected_count: Option<usize>) {
     match result {
         swipl_rs::QueryResult::Solutions(sols) => {

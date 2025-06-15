@@ -168,7 +168,7 @@ impl PrologServer {
         }
         command.arg(format!("--password={}", self.effective_password.as_ref().unwrap()));
 
-        let mut create_uds = false;
+        let create_uds = false;
         if let Some(_uds_path_config) = &self.config.unix_domain_socket {
              #[cfg(all(unix, feature="unix-socket"))]
              {
