@@ -6,7 +6,7 @@ use log::{debug, error, trace, warn, info};
 use serde_json::Value;
 
 use crate::error::PrologError;
-use crate::types::QueryResult;
+use crate::types::{QueryResult};
 
 // Use feature flags for Unix Domain Sockets
 #[cfg(feature = "unix-socket")]

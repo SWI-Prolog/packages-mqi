@@ -359,7 +359,7 @@ impl PrologServer {
         }
 
         // Ensure we have connection details
-        let password = self.effective_password.clone().ok_or_else(|| PrologError::InvalidState("Password not available for connection".to_string()))?;
+        let _password = self.effective_password.clone().ok_or_else(|| PrologError::InvalidState("Password not available for connection".to_string()))?;
 
         let address = self.effective_uds_path.as_ref()
             .map(|_p| {
@@ -371,7 +371,7 @@ impl PrologServer {
             .or_else(|| self.effective_port.map(|p| Ok(ConnectionAddr::Tcp(p))))
             .ok_or_else(|| PrologError::InvalidState("No valid connection address (port/UDS) available".to_string()))??;
 
-        PrologSession::connect(address, &password, self.connection_failed.clone())
+        PrologSession::connect(address, &_password, self.connection_failed.clone())
     }
 
     /// Stops the SWI-Prolog process if it was launched by this instance.
