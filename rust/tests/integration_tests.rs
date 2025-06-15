@@ -89,7 +89,8 @@ fn test_basic_connect_and_query() {
     println!("server.connect() successful.");
     let result = session.query("atom(a)", None).expect("Query failed");
     println!("First query successful.");
-    assert_success(result, true);
+    let expected_solution = vec![HashMap::new()]; 
+    assert_solutions(result, expected_solution);
 
     let result_fail = session.query("fail", None).expect("Query failed");
     println!("Second query successful.");

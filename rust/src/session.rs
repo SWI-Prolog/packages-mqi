@@ -287,7 +287,14 @@ impl PrologSession {
     /// Handles receiving and parsing a response from the MQI server.
     fn handle_response(&mut self) -> Result<QueryResult, PrologError> {
         let response_str = receive_message(&mut *self.stream)?; // Can throw Io error
-        let response_json: Value = serde_json::from_str(&response_str)?; // Can throw Json error
+        
+        // Check for simple "false" response for query failure
+        let trimmed_response = response_str.trim();
+        if trimmed_response == "\"false\"" { // Prolog sends "false" including quotes
+            return Ok(QueryResult::Success(false));
+        }
+
+        let response_json: Value = serde_json::from_str(trimmed_response)?; // Parse the trimmed string
         trace!("Received JSON: {}", response_json);
 
         match response_json.get("functor").and_then(|f| f.as_str()) {
