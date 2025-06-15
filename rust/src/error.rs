@@ -26,7 +26,7 @@ pub enum PrologError {
     AuthenticationFailed,
 
     /// A specific exception occurred within the Prolog execution.
-    #[error("Prolog exception: {kind}")] // TODO: Improve display with term
+    #[error("Prolog exception: {kind}{}", term.as_ref().map(|t| format!(" ({})", serde_json::to_string(t).unwrap_or_else(|_| "<unserializable term>".to_string()))).unwrap_or_default())]
     PrologException {
         kind: String,
         term: Option<serde_json::Value>,

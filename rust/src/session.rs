@@ -1,10 +1,10 @@
-use std::io::{self, Read, Write};
-use std::net::{Shutdown, TcpStream};
+use std::io::{self, BufRead, BufReader, Read, Write};
+use std::net::{Shutdown, TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use log::{debug, error, trace, warn};
+use log::{debug, error, trace, warn, info};
 use serde_json::Value;
 
 use crate::error::PrologError;
@@ -79,7 +79,8 @@ impl PrologSession {
             ConnectionAddr::Tcp(port) => {
                 // Add connection retry logic like in Python?
                 let tcp_stream = TcpStream::connect(("127.0.0.1", port))?;
-                // TODO: Consider setting TCP_NODELAY or keepalive options?
+                tcp_stream.set_nodelay(true).map_err(|e| warn!("Failed to set TCP_NODELAY: {}", e)).ok(); // Log error but don't fail connection
+                // TODO: Consider setting TCP keepalive options?
                 Box::new(tcp_stream)
             }
             #[cfg(feature = "unix-socket")]
@@ -352,86 +353,46 @@ impl Drop for PrologSession {
 
 // --- Communication Helpers ---
 
-/// Sends a message according to the MQI protocol.
-fn send_message<W: Write>(stream: &mut W, message: &str) -> Result<(), PrologError> {
-    // Ensure message ends with exactly one '.\n'
-    let msg = message.trim().trim_end_matches('.').to_string() + ".\n";
-    trace!("Sending: {}", msg.trim_end());
-    let msg_bytes = msg.as_bytes(); // MQI v1.0 uses UTF-8 byte length
-    let header = format!("{}.\n", msg_bytes.len());
+/// Sends a properly formatted message (length prefix + message) to the MQI server.
+fn send_message<W: Write + ?Sized>(stream: &mut W, message: &str) -> Result<(), PrologError> {
+    let bytes = message.as_bytes();
+    let len = bytes.len();
+    let len_str = format!("{}.\n", len);
 
-    stream.write_all(header.as_bytes())?;
-    stream.write_all(msg_bytes)?;
-    stream.flush()?;
+    // Write length prefix first
+    stream.write_all(len_str.as_bytes())?;
+
+    // Then write the actual message
+    stream.write_all(bytes)?;
+    stream.flush()?; // Ensure the message is sent immediately
     Ok(())
 }
 
-/// Receives a message according to the MQI protocol.
-fn receive_message<R: Read>(stream: &mut R) -> Result<String, PrologError> {
-    let mut size_buf = Vec::new();
-    let mut byte_buf = [0u8; 1];
-    let mut heartbeat_count = 0;
-    let mut saw_dot = false;
+/// Receives a properly formatted message (length prefix + message) from the MQI server.
+fn receive_message<R: Read + ?Sized>(stream: &mut R) -> Result<String, PrologError> {
+    // Use BufReader for efficient line reading
+    let mut reader = BufReader::new(stream);
+    let mut len_str = String::new();
 
-    // Read the size header: <digits>.<newline>
-    loop {
-        // TODO: Add read timeout logic here?
-        stream.read_exact(&mut byte_buf)?;
-        match byte_buf[0] {
-            b'\n' => {
-                if saw_dot { break; } // Correct termination
-                else { return Err(PrologError::InvalidState("Unexpected newline in size header before dot".into())); }
-            },
-            b'.' => {
-                if size_buf.is_empty() && !saw_dot { // Only treat leading dots as heartbeats
-                     heartbeat_count += 1;
-                     trace!("Received heartbeat");
-                } else if !saw_dot { // First dot after digits
-                    saw_dot = true;
-                } else { // Multiple dots - error
-                    return Err(PrologError::InvalidState("Multiple dots found in size header".into()));
-                }
-            },
-            digit if digit.is_ascii_digit() => {
-                if saw_dot {
-                    return Err(PrologError::InvalidState("Digit received after dot in size header".into()));
-                }
-                size_buf.push(digit)
-            },
-            other => return Err(PrologError::InvalidState(format!("Unexpected character in size header: {}", other as char))),
-        }
-    }
+    // Read until the ".\n" delimiter for the length
+    reader.read_line(&mut len_str)?;
 
-    if !saw_dot {
-        return Err(PrologError::InvalidState("Size header did not contain a dot separator".into()));
-    }
+    // Parse the length string (remove ".\n")
+    let len = len_str
+        .trim_end_matches(".\n")
+        .parse::<usize>()
+        .map_err(|_| PrologError::Io(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Failed to parse message length",
+        )))?;
 
-    let size_str = String::from_utf8(size_buf)
-        .map_err(|_| PrologError::InvalidState("Invalid UTF-8 in size header".into()))?;
-    let size: usize = size_str
-        .parse()
-        .map_err(|_| PrologError::InvalidState(format!("Invalid number in size header: \"{}\"", size_str)))?;
+    // Read the exact number of bytes for the message payload
+    let mut message_buf = vec![0; len];
+    reader.read_exact(&mut message_buf)?;
 
-    trace!("Expecting {} bytes (after {} heartbeats)", size, heartbeat_count);
-
-    // Read the message body
-    let mut msg_buf = vec![0u8; size];
-    stream.read_exact(&mut msg_buf)?;
-
-    let msg_str = String::from_utf8(msg_buf)
-        .map_err(|_| PrologError::InvalidState("Invalid UTF-8 in message body".into()))?;
-
-    // The message from Prolog includes the trailing ".\n"
-    trace!("Received raw: {:?}", msg_str);
-
-    // We should return the string *without* the trailing .
-    if !msg_str.ends_with(".\n") {
-        // This indicates a framing error or protocol violation from the server
-        warn!("Received message did not end with expected .\n");
-        // Depending on strictness, could return error or try to recover
-        // return Err(PrologError::InvalidState("Received message frame error".into()));
-    }
-
-    // Return the string content, trimming the trailing .
-    Ok(msg_str.trim_end_matches(".\n").to_string())
+    // Convert bytes to String (assuming UTF-8)
+    String::from_utf8(message_buf).map_err(|e| PrologError::Io(std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        format!("Failed to decode UTF-8 message: {}", e),
+    )))
 } 

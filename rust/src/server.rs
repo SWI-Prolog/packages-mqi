@@ -6,6 +6,7 @@ use std::thread;
 use log::{
     debug, error, info, trace, warn
 };
+use std::time::Duration;
 
 #[cfg(feature = "password-gen")]
 use uuid::Uuid;
@@ -307,12 +308,15 @@ impl PrologServer {
         }).map_err(|e| PrologError::LaunchError(format!("Failed to spawn stdout reader thread: {}", e)))?;
 
         // --- Optional: Set MQI Traces ---
-        if let Some(traces) = &self.config.mqi_traces {
+        // Clone traces *before* the mutable borrow for connect
+        let traces_to_set = self.config.mqi_traces.clone();
+
+        if let Some(traces) = traces_to_set { // Use the cloned value
             info!("Setting MQI traces to: {}", traces);
             // Need to create a temporary session to send the debug command
-            match self.connect() { // Use the connection details we just established
+            match self.connect() { // Mutable borrow happens here
                 Ok(mut temp_session) => {
-                    let trace_goal = format!("debug(mqi({})).", traces);
+                    let trace_goal = format!("debug(mqi({})).", traces); // Use original `traces` from pattern matching
                     if let Err(e) = temp_session.query(&trace_goal, None) {
                         warn!("Failed to set MQI traces via query: {}", e);
                         // Don't fail the whole start for this, just log it.
@@ -323,7 +327,7 @@ impl PrologServer {
                 Err(e) => {
                     error!("Failed to connect to set MQI traces: {}", e);
                     // If we can't connect immediately, something is wrong, fail start.
-                    let _ = self.stop(true); // Attempt cleanup
+                    let _ = self.stop(true); // Attempt cleanup (immutable borrow `self.config` ended)
                     return Err(e);
                 }
             }
@@ -432,6 +436,50 @@ impl PrologServer {
         }
 
         result
+    }
+
+    fn spawn_prolog_process(&mut self) -> Result<Child, PrologError> {
+        let mut command = Command::new(&self.config.prolog_path);
+
+        // ... existing code ...
+
+        // Set up MQI arguments
+        command.arg("mqi");
+
+        // Store traces locally before mutable borrow for connect
+        let traces = self.config.mqi_traces.clone();
+
+        // Start the process *before* connecting to potentially use its output
+        debug!("Spawning SWI-Prolog process: {:?}", command);
+        let child = command.spawn().map_err(|e| PrologError::ProcessStartFailed(e.to_string()))?;
+        self.process = Some(child);
+
+        // Give Prolog a moment to start up and bind the socket/port
+        // TODO: Make this more robust, e.g., by checking stderr/stdout or attempting connection in a loop
+        std::thread::sleep(Duration::from_millis(500));
+
+        // Now connect to the SWI-Prolog MQI server
+        match self.connect() { // Use the connection details we just established
+            Ok(mut temp_session) => {
+                // If traces were specified, send the debug command
+                if let Some(t) = traces {
+                    let trace_goal = format!("debug(mqi({})).", t);
+                    match temp_session.run_query(&trace_goal) {
+                        Ok(_) => debug!("Enabled MQI tracing: {}", t),
+                        Err(e) => warn!("Failed to enable MQI tracing '{}': {}", t, e),
+                    }
+                }
+                self.process = Some(child);
+            }
+            Err(e) => {
+                error!("Failed to connect to spawned MQI server: {}", e);
+                // Attempt to clean up the child process if connection fails
+                self.stop(true).ok(); // Ignore error during cleanup
+                return Err(e); // Return the connection error
+            }
+        }
+
+        Ok(self.process.as_ref().unwrap().id() as _) // Assuming process is Some here
     }
 }
 
