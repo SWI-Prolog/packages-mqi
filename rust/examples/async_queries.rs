@@ -1,4 +1,4 @@
-use swipl_rs::{PrologServer, ServerConfig, QueryResult};
+use swipl_rs::{PrologServer, QueryResult, ServerConfig};
 
 fn main() {
     // Check if SWI-Prolog is available
@@ -10,18 +10,22 @@ fn main() {
     let config = ServerConfig::default();
     let mut server = PrologServer::new(config).expect("Failed to create server");
     server.start().expect("Failed to start server");
-    
+
     let mut session = server.connect().expect("Failed to connect");
-    
+
     // Start async query
     println!("Starting async query: between(1, 5, X)");
-    session.query_async("between(1, 5, X)", false, None)
+    session
+        .query_async("between(1, 5, X)", false, None)
         .expect("Failed to start async query");
-    
+
     // Retrieve results one by one
     println!("Retrieving results:");
     let mut count = 0;
-    while let Some(result) = session.query_async_result(Some(1.0)).expect("Failed to get result") {
+    while let Some(result) = session
+        .query_async_result(Some(1.0))
+        .expect("Failed to get result")
+    {
         match result {
             QueryResult::Solutions(solutions) => {
                 count += 1;
@@ -31,7 +35,7 @@ fn main() {
         }
     }
     println!("Total results: {}", count);
-    
+
     session.close().expect("Failed to close session");
     server.stop(false).expect("Failed to stop server");
 }

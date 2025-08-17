@@ -54,10 +54,7 @@ pub enum PrologError {
 
     /// Protocol version mismatch between the client library and the MQI server.
     #[error("Protocol version mismatch: client requires {client}, server provides {server}")]
-    VersionMismatch {
-        client: String,
-        server: String,
-    },
+    VersionMismatch { client: String, server: String },
 
     /// The required feature (e.g., unix-socket) is not enabled.
     #[error("Feature not enabled: {0}")]

@@ -45,7 +45,7 @@ impl QueryResult {
     pub fn parse_solutions(solutions_json: &[Value]) -> Result<Self, PrologError> {
         Self::parse_solutions_internal(solutions_json)
     }
-    
+
     fn parse_solutions_internal(solutions_json: &[Value]) -> Result<Self, PrologError> {
         let mut solutions = Vec::new();
         for solution_json in solutions_json {
@@ -59,12 +59,17 @@ impl QueryResult {
                     let mut solution = HashMap::new();
                     for assignment_json in assignments_json {
                         // Expect structure like {"functor": "=", "args": ["VarName", <Value>]}
-                        if let Some(functor) = assignment_json.get("functor").and_then(|f| f.as_str()) {
+                        if let Some(functor) =
+                            assignment_json.get("functor").and_then(|f| f.as_str())
+                        {
                             if functor == "=" {
-                                if let Some(args) = assignment_json.get("args").and_then(|a| a.as_array()) {
+                                if let Some(args) =
+                                    assignment_json.get("args").and_then(|a| a.as_array())
+                                {
                                     if args.len() == 2 {
                                         if let Some(var_name) = args[0].as_str() {
-                                            let term_value = serde_json::from_value(args[1].clone())?;
+                                            let term_value =
+                                                serde_json::from_value(args[1].clone())?;
                                             solution.insert(var_name.to_string(), term_value);
                                             continue; // Move to next assignment
                                         }
@@ -124,7 +129,7 @@ pub fn prolog_name(json: &Value) -> Option<&str> {
 
 /// Gets the arguments from a Prolog functor JSON value.
 pub fn prolog_args(json: &Value) -> Option<&Vec<Value>> {
-     match json {
+    match json {
         Value::Object(map) => map.get("args").and_then(|v| v.as_array()),
         _ => None,
     }
@@ -137,14 +142,24 @@ pub fn prolog_term_to_string(term: &PrologTerm) -> String {
         PrologTerm::Variable(s) => s.clone(),
         PrologTerm::Integer(i) => i.to_string(),
         PrologTerm::Float(f) => f.to_string(),
-        PrologTerm::Bool(b) => if *b { "true".to_string() } else { "false".to_string() },
+        PrologTerm::Bool(b) => {
+            if *b {
+                "true".to_string()
+            } else {
+                "false".to_string()
+            }
+        }
         PrologTerm::List(items) => {
             let inner: Vec<String> = items.iter().map(prolog_term_to_string).collect();
             format!("[{}]", inner.join(", "))
         }
         PrologTerm::Compound(c) => {
-             let inner: Vec<String> = c.args.iter().map(prolog_term_to_string).collect();
-             format!("{}({})", quote_prolog_identifier(&c.functor), inner.join(", "))
+            let inner: Vec<String> = c.args.iter().map(prolog_term_to_string).collect();
+            format!(
+                "{}({})",
+                quote_prolog_identifier(&c.functor),
+                inner.join(", ")
+            )
         }
         PrologTerm::Other(v) => v.to_string(), // Fallback to JSON string representation
     }
@@ -167,4 +182,4 @@ fn quote_prolog_identifier(identifier: &str) -> String {
     } else {
         identifier.to_string()
     }
-} 
+}

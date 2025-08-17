@@ -2,11 +2,11 @@ use std::io::{self, BufReader, Read, Write};
 use std::net::{Shutdown, TcpStream};
 use std::sync::{Arc, Mutex};
 
-use log::{debug, error, trace, warn, info};
+use log::{debug, error, info, trace, warn};
 use serde_json::Value;
 
 use crate::error::PrologError;
-use crate::types::{QueryResult};
+use crate::types::QueryResult;
 
 // Use feature flags for Unix Domain Sockets
 #[cfg(feature = "unix-socket")]
@@ -29,7 +29,7 @@ pub struct PrologSession {
     stream: Box<dyn ReadWriteShutdown>, // Custom trait for common socket ops
     connection_failed: Arc<Mutex<bool>>, // Shared flag with PrologServer
     _communication_thread_id: Option<String>, // Placeholder
-    _goal_thread_id: Option<String>,          // Placeholder
+    _goal_thread_id: Option<String>,    // Placeholder
     server_protocol_major: u32,
     server_protocol_minor: u32,
 }
@@ -48,7 +48,7 @@ impl ReadWriteShutdown for TcpStream {
     fn _set_read_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
         TcpStream::set_read_timeout(self, dur)
     }
-     fn _set_write_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
+    fn _set_write_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
         TcpStream::set_write_timeout(self, dur)
     }
 }
@@ -61,7 +61,7 @@ impl ReadWriteShutdown for UnixStream {
     fn _set_read_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
         UnixStream::set_read_timeout(self, dur)
     }
-     fn _set_write_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
+    fn _set_write_timeout(&self, dur: Option<std::time::Duration>) -> io::Result<()> {
         UnixStream::set_write_timeout(self, dur)
     }
 }
@@ -106,16 +106,16 @@ impl PrologSession {
 
         // Parse initial response (true([[threads(CommId, GoalId), version(Major, Minor)]]))
         // Or just true([]) if older version or password failed.
-        if !response_json.get("functor").and_then(|f| f.as_str()).map_or(false, |f| f == "true") {
+        if response_json.get("functor").and_then(|f| f.as_str()) != Some("true") {
             // Check if it's an exception, specifically password mismatch
             if response_json.get("functor").and_then(|f| f.as_str()) == Some("exception") {
-                 if let Some(args) = response_json.get("args").and_then(|a| a.as_array()) {
-                     if let Some(kind) = args.get(0).and_then(|k| k.as_str()) {
-                         if kind == "password_mismatch" {
-                             return Err(PrologError::AuthenticationFailed);
-                         }
-                     }
-                 }
+                if let Some(args) = response_json.get("args").and_then(|a| a.as_array()) {
+                    if let Some(kind) = args.first().and_then(|k| k.as_str()) {
+                        if kind == "password_mismatch" {
+                            return Err(PrologError::AuthenticationFailed);
+                        }
+                    }
+                }
             }
             return Err(PrologError::AuthenticationFailed); // Assume auth failure if not true(...)
         }
@@ -133,33 +133,63 @@ impl PrologSession {
 
         session.check_protocol_version()?;
 
-        info!("MQI session connected successfully. Server v{}.{}", major, minor);
+        info!(
+            "MQI session connected successfully. Server v{}.{}",
+            major, minor
+        );
         Ok(session)
     }
 
     // Renamed from parse_initial_response to be more specific
-    fn parse_initial_true_args(json: &Value) -> Result<(Option<String>, Option<String>, u32, u32), PrologError> {
+    fn parse_initial_true_args(
+        json: &Value,
+    ) -> Result<(Option<String>, Option<String>, u32, u32), PrologError> {
         // Expecting true([[threads(C, G), version(Ma, Mi)]]) or true([[]])
-         if let Some(args) = json.get("args").and_then(|a| a.as_array()) {
+        if let Some(args) = json.get("args").and_then(|a| a.as_array()) {
             if args.len() == 1 {
                 if let Some(outer_list) = args[0].as_array() {
-                     if outer_list.is_empty() { // true([[]]) case
-                         return Ok((None, None, 0, 0)); // Pre-version info MQI
-                     }
+                    if outer_list.is_empty() {
+                        // true([[]]) case
+                        return Ok((None, None, 0, 0)); // Pre-version info MQI
+                    }
                     if let Some(inner_list) = outer_list[0].as_array() {
-                        if let Some(first_element) = inner_list.get(0) {
+                        if let Some(first_element) = inner_list.first() {
                             // Check for threads/2
-                            if let Some(comm_args) = first_element.get("args").and_then(|a| a.as_array()) {
-                                if first_element.get("functor").and_then(|f| f.as_str()) == Some("threads") && comm_args.len() == 2 {
+                            if let Some(comm_args) =
+                                first_element.get("args").and_then(|a| a.as_array())
+                            {
+                                if first_element.get("functor").and_then(|f| f.as_str())
+                                    == Some("threads")
+                                    && comm_args.len() == 2
+                                {
                                     let comm_id = comm_args[0].as_str().map(String::from);
                                     let goal_id = comm_args[1].as_str().map(String::from);
 
                                     // Check for version/2 (optional)
                                     if let Some(second_element) = inner_list.get(1) {
-                                        if let Some(version_args) = second_element.get("args").and_then(|a| a.as_array()) {
-                                            if second_element.get("functor").and_then(|f| f.as_str()) == Some("version") && version_args.len() == 2 {
-                                                let major = version_args[0].as_u64().ok_or_else(|| PrologError::InvalidState("Invalid version major number".into()))? as u32;
-                                                let minor = version_args[1].as_u64().ok_or_else(|| PrologError::InvalidState("Invalid version minor number".into()))? as u32;
+                                        if let Some(version_args) =
+                                            second_element.get("args").and_then(|a| a.as_array())
+                                        {
+                                            if second_element
+                                                .get("functor")
+                                                .and_then(|f| f.as_str())
+                                                == Some("version")
+                                                && version_args.len() == 2
+                                            {
+                                                let major =
+                                                    version_args[0].as_u64().ok_or_else(|| {
+                                                        PrologError::InvalidState(
+                                                            "Invalid version major number".into(),
+                                                        )
+                                                    })?
+                                                        as u32;
+                                                let minor =
+                                                    version_args[1].as_u64().ok_or_else(|| {
+                                                        PrologError::InvalidState(
+                                                            "Invalid version minor number".into(),
+                                                        )
+                                                    })?
+                                                        as u32;
                                                 return Ok((comm_id, goal_id, major, minor));
                                             }
                                         }
@@ -172,12 +202,14 @@ impl PrologSession {
                     }
                 }
             }
-         }
-         // If structure doesn't match, assume something went wrong post-authentication
-         Err(PrologError::InvalidState("Unexpected structure for initial 'true' response".into()))
+        }
+        // If structure doesn't match, assume something went wrong post-authentication
+        Err(PrologError::InvalidState(
+            "Unexpected structure for initial 'true' response".into(),
+        ))
     }
 
-     fn check_protocol_version(&self) -> Result<(), PrologError> {
+    fn check_protocol_version(&self) -> Result<(), PrologError> {
         // Client library requires MQI >= 1.0
         const REQUIRED_MAJOR: u32 = 1;
         const REQUIRED_MINOR: u32 = 0;
@@ -185,25 +217,33 @@ impl PrologSession {
         // Version 0.0 had a protocol bug, but swiplserver works around it.
         // This Rust version *could* too, but let's mandate >= 1.0 for simplicity now.
         if self.server_protocol_major == 0 && self.server_protocol_minor == 0 {
-            warn!("Server is MQI v0.0 which has known protocol issues. Compatibility not guaranteed.");
+            warn!(
+                "Server is MQI v0.0 which has known protocol issues. Compatibility not guaranteed."
+            );
             // For now, allow 0.0 but warn. Could return error here instead.
             // return Err(PrologError::VersionMismatch { ... });
             return Ok(());
         }
 
-        if self.server_protocol_major == REQUIRED_MAJOR && self.server_protocol_minor >= REQUIRED_MINOR {
+        if self.server_protocol_major == REQUIRED_MAJOR {
             Ok(())
         } else {
-             Err(PrologError::VersionMismatch {
+            Err(PrologError::VersionMismatch {
                 client: format!("{}.{}", REQUIRED_MAJOR, REQUIRED_MINOR),
-                server: format!("{}.{}", self.server_protocol_major, self.server_protocol_minor),
+                server: format!(
+                    "{}.{}",
+                    self.server_protocol_major, self.server_protocol_minor
+                ),
             })
         }
     }
 
-
     /// Executes a query synchronously, waiting for all results (like findall/3).
-    pub fn query(&mut self, goal: &str, timeout_seconds: Option<f64>) -> Result<QueryResult, PrologError> {
+    pub fn query(
+        &mut self,
+        goal: &str,
+        timeout_seconds: Option<f64>,
+    ) -> Result<QueryResult, PrologError> {
         let goal = goal.trim().trim_end_matches('.');
         let timeout_str = timeout_seconds.map_or_else(|| "_".to_string(), |t| t.to_string());
         let command = format!("run(({}), {}).", goal, timeout_str);
@@ -212,28 +252,38 @@ impl PrologSession {
     }
 
     /// Starts a query asynchronously.
-    pub fn query_async(&mut self, goal: &str, find_all: bool, timeout_seconds: Option<f64>) -> Result<(), PrologError> {
-         let goal = goal.trim().trim_end_matches('.');
-         let timeout_str = timeout_seconds.map_or_else(|| "_".to_string(), |t| t.to_string());
-         let find_all_str = if find_all { "true" } else { "false" };
-         let command = format!("run_async(({}), {}, {}).", goal, timeout_str, find_all_str);
-         send_message(&mut *self.stream, &command)?;
-         match self.handle_response()? {
-             // run_async returns true([[[]]]) when successful - one empty solution
-             QueryResult::Solutions(ref sols) if sols.len() == 1 && sols[0].is_empty() => Ok(()),
-             QueryResult::Success(true) => Ok(()), // For compatibility
-             _ => Err(PrologError::InvalidState("Unexpected response from run_async".to_string())),
-         }
+    pub fn query_async(
+        &mut self,
+        goal: &str,
+        find_all: bool,
+        timeout_seconds: Option<f64>,
+    ) -> Result<(), PrologError> {
+        let goal = goal.trim().trim_end_matches('.');
+        let timeout_str = timeout_seconds.map_or_else(|| "_".to_string(), |t| t.to_string());
+        let find_all_str = if find_all { "true" } else { "false" };
+        let command = format!("run_async(({}), {}, {}).", goal, timeout_str, find_all_str);
+        send_message(&mut *self.stream, &command)?;
+        match self.handle_response()? {
+            // run_async returns true([[[]]]) when successful - one empty solution
+            QueryResult::Solutions(ref sols) if sols.len() == 1 && sols[0].is_empty() => Ok(()),
+            QueryResult::Success(true) => Ok(()), // For compatibility
+            _ => Err(PrologError::InvalidState(
+                "Unexpected response from run_async".to_string(),
+            )),
+        }
     }
 
     /// Retrieves the next result from an asynchronous query.
-    pub fn query_async_result(&mut self, wait_timeout_seconds: Option<f64>) -> Result<Option<QueryResult>, PrologError> {
+    pub fn query_async_result(
+        &mut self,
+        wait_timeout_seconds: Option<f64>,
+    ) -> Result<Option<QueryResult>, PrologError> {
         let timeout_str = wait_timeout_seconds.map_or_else(|| "-1".to_string(), |t| t.to_string());
         let command = format!("async_result({}).", timeout_str);
         send_message(&mut *self.stream, &command)?;
         match self.handle_response() {
             Ok(result) => Ok(Some(result)),
-            Err(PrologError::PrologException{ kind, .. }) if kind == "no_more_results" => Ok(None),
+            Err(PrologError::PrologException { kind, .. }) if kind == "no_more_results" => Ok(None),
             Err(e) => Err(e),
         }
     }
@@ -242,11 +292,13 @@ impl PrologSession {
     pub fn cancel_async(&mut self) -> Result<(), PrologError> {
         let command = "cancel_async.";
         send_message(&mut *self.stream, command)?;
-         match self.handle_response()? {
-             QueryResult::Success(true) => Ok(()),
-             QueryResult::Solutions(ref sols) if sols.len() == 1 && sols[0].is_empty() => Ok(()),
-             _ => Err(PrologError::InvalidState("Unexpected response from cancel_async".to_string())),
-         }
+        match self.handle_response()? {
+            QueryResult::Success(true) => Ok(()),
+            QueryResult::Solutions(ref sols) if sols.len() == 1 && sols[0].is_empty() => Ok(()),
+            _ => Err(PrologError::InvalidState(
+                "Unexpected response from cancel_async".to_string(),
+            )),
+        }
     }
 
     /// Sends the `close.` command to the server to cleanly end this session.
@@ -254,7 +306,10 @@ impl PrologSession {
         debug!("Closing MQI session...");
         let command = "close.";
         if let Err(e) = send_message(&mut *self.stream, command) {
-            warn!("Error sending close command (connection might already be closed): {}", e);
+            warn!(
+                "Error sending close command (connection might already be closed): {}",
+                e
+            );
             // Continue to shutdown socket anyway
         } else {
             // Try to read the acknowledgment, but don't error if it fails
@@ -265,10 +320,16 @@ impl PrologSession {
         }
 
         // Shutdown write side first
-        let _ = self.stream.shutdown(Shutdown::Write).map_err(|e| warn!("Error shutting down socket write side: {}", e));
+        let _ = self
+            .stream
+            .shutdown(Shutdown::Write)
+            .map_err(|e| warn!("Error shutting down socket write side: {}", e));
         // Maybe read remaining data?
         // let _ = self.stream.read_to_end(&mut Vec::new());
-        let _ = self.stream.shutdown(Shutdown::Both).map_err(|e| warn!("Error shutting down socket both sides: {}", e));
+        let _ = self
+            .stream
+            .shutdown(Shutdown::Both)
+            .map_err(|e| warn!("Error shutting down socket both sides: {}", e));
         info!("MQI session closed.");
         Ok(())
     }
@@ -278,21 +339,24 @@ impl PrologSession {
         let command = "quit.";
         send_message(&mut *self.stream, command)?;
         match self.handle_response()? {
-             QueryResult::Success(true) => {
+            QueryResult::Success(true) => {
                 *self.connection_failed.lock().unwrap() = true; // Mark connection as intentionally down
-                 Ok(())
-             }
-             _ => Err(PrologError::InvalidState("Unexpected response from quit".to_string())),
-         }
+                Ok(())
+            }
+            _ => Err(PrologError::InvalidState(
+                "Unexpected response from quit".to_string(),
+            )),
+        }
     }
 
     /// Handles receiving and parsing a response from the MQI server.
     fn handle_response(&mut self) -> Result<QueryResult, PrologError> {
         let response_str = receive_message(&mut *self.stream)?; // Can throw Io error
-        
+
         // Check for simple "false" response for query failure
         let trimmed_response = response_str.trim();
-        if trimmed_response == "\"false\"" { // Prolog sends "false" including quotes
+        if trimmed_response == "\"false\"" {
+            // Prolog sends "false" including quotes
             return Ok(QueryResult::Success(false));
         }
 
@@ -304,51 +368,69 @@ impl PrologSession {
                 let args = response_json.get("args").and_then(|a| a.as_array());
                 match args {
                     Some(outer_list) if outer_list.len() == 1 => {
-                        let solutions = outer_list[0].as_array().ok_or_else(|| PrologError::InvalidState("Expected list of solutions in 'true' response".into()))?;
+                        let solutions = outer_list[0].as_array().ok_or_else(|| {
+                            PrologError::InvalidState(
+                                "Expected list of solutions in 'true' response".into(),
+                            )
+                        })?;
                         if solutions.is_empty() {
                             Ok(QueryResult::Success(true)) // true([]) -> Simple success
                         } else {
                             QueryResult::parse_solutions(solutions) // true([[...], [...]])
                         }
                     }
-                    _ => Err(PrologError::InvalidState("Unexpected structure for 'true' response".into()))
+                    _ => Err(PrologError::InvalidState(
+                        "Unexpected structure for 'true' response".into(),
+                    )),
                 }
             }
             Some("false") => Ok(QueryResult::Success(false)),
             Some("exception") => {
-                 let args = response_json.get("args").and_then(|a| a.as_array());
-                 match args {
-                     Some(ex_arg) if ex_arg.len() == 1 => {
-                         let ex_term = ex_arg[0].clone();
-                         let kind = if let Some(simple_str) = ex_term.as_str() {
-                             simple_str.to_string()
-                         } else if let Some(functor) = ex_term.get("functor").and_then(|f| f.as_str()) {
-                             // For compound exceptions like syntax_error(operator_expected)
-                             functor.to_string()
-                         } else {
-                             "complex_exception".to_string()
-                         };
-                         error!("Received Prolog exception: {}", kind);
+                let args = response_json.get("args").and_then(|a| a.as_array());
+                match args {
+                    Some(ex_arg) if ex_arg.len() == 1 => {
+                        let ex_term = ex_arg[0].clone();
+                        let kind = if let Some(simple_str) = ex_term.as_str() {
+                            simple_str.to_string()
+                        } else if let Some(functor) =
+                            ex_term.get("functor").and_then(|f| f.as_str())
+                        {
+                            // For compound exceptions like syntax_error(operator_expected)
+                            functor.to_string()
+                        } else {
+                            "complex_exception".to_string()
+                        };
+                        error!("Received Prolog exception: {}", kind);
 
-                         // Map specific Prolog errors to specific Rust errors
-                         let err = match kind.as_str() {
-                             "connection_failed" => PrologError::ConnectionFailed("Server reported connection failure".into()),
-                             "time_limit_exceeded" => PrologError::Timeout,
-                             "no_query" => PrologError::NoQuery,
-                             "cancel_goal" => PrologError::QueryCancelled,
-                             "result_not_available" => PrologError::ResultNotAvailable,
-                             _ => PrologError::PrologException { kind, term: Some(ex_term) }
-                         };
+                        // Map specific Prolog errors to specific Rust errors
+                        let err = match kind.as_str() {
+                            "connection_failed" => PrologError::ConnectionFailed(
+                                "Server reported connection failure".into(),
+                            ),
+                            "time_limit_exceeded" => PrologError::Timeout,
+                            "no_query" => PrologError::NoQuery,
+                            "cancel_goal" => PrologError::QueryCancelled,
+                            "result_not_available" => PrologError::ResultNotAvailable,
+                            _ => PrologError::PrologException {
+                                kind,
+                                term: Some(ex_term),
+                            },
+                        };
 
-                         if matches!(err, PrologError::ConnectionFailed(_)) {
+                        if matches!(err, PrologError::ConnectionFailed(_)) {
                             *self.connection_failed.lock().unwrap() = true;
-                         }
-                         Err(err)
-                     }
-                     _ => Err(PrologError::InvalidState("Unexpected structure for 'exception' response".into()))
-                 }
+                        }
+                        Err(err)
+                    }
+                    _ => Err(PrologError::InvalidState(
+                        "Unexpected structure for 'exception' response".into(),
+                    )),
+                }
             }
-            _ => Err(PrologError::InvalidState(format!("Unknown response structure: {}", response_str))),
+            _ => Err(PrologError::InvalidState(format!(
+                "Unknown response structure: {}",
+                response_str
+            ))),
         }
     }
 }
@@ -375,11 +457,18 @@ fn send_message<W: Write + ?Sized>(stream: &mut W, message: &str) -> Result<(), 
     let len_str = format!("{}.\n", len);
     let len_bytes = len_str.as_bytes();
 
-    debug!("[SEND] Length prefix bytes ({}) Hex: {:02X?}", len_str.trim_end(), len_bytes);
+    debug!(
+        "[SEND] Length prefix bytes ({}) Hex: {:02X?}",
+        len_str.trim_end(),
+        len_bytes
+    );
     // Write length prefix first
     stream.write_all(len_bytes)?;
 
-    debug!("[SEND] Message body bytes ({}) Hex: {:02X?}", message, bytes);
+    debug!(
+        "[SEND] Message body bytes ({}) Hex: {:02X?}",
+        message, bytes
+    );
     // Then write the actual message
     stream.write_all(bytes)?;
     stream.flush()?; // Ensure the message is sent immediately
@@ -402,11 +491,14 @@ fn receive_message<R: Read + ?Sized>(stream: &mut R) -> Result<String, PrologErr
         match reader.read_exact(&mut byte) {
             Ok(_) => raw_len_prefix_bytes.push(byte[0]),
             Err(e) => {
-                error!("[RECV] Error reading length byte: {}. Raw prefix read so far: {:02X?}", e, raw_len_prefix_bytes);
+                error!(
+                    "[RECV] Error reading length byte: {}. Raw prefix read so far: {:02X?}",
+                    e, raw_len_prefix_bytes
+                );
                 return Err(e.into());
             }
         }
-        
+
         let current_byte = byte[0];
         if current_byte == b'.' {
             // If we haven't read any digits yet, this might be a lone heartbeat.
@@ -416,84 +508,119 @@ fn receive_message<R: Read + ?Sized>(stream: &mut R) -> Result<String, PrologErr
                 continue; // Read the next byte
             } else {
                 // Found the end of the length prefix
-                break; 
+                break;
             }
         } else if current_byte.is_ascii_digit() {
             len_bytes.push(current_byte);
         } else if current_byte == b'\r' || current_byte == b'\n' {
             // Ignore potential CR/LF in length part (unlikely but possible)
-            trace!("[RECV] Ignored CR/LF ({:02X?}) during length prefix read.", current_byte);
+            trace!(
+                "[RECV] Ignored CR/LF ({:02X?}) during length prefix read.",
+                current_byte
+            );
             continue;
         } else {
-             // Received unexpected non-digit, non-delimiter byte.
-             // Could be a heartbeat if len_bytes is empty, or an error.
-             if len_bytes.is_empty() {
-                 trace!("[RECV] Read non-digit/non-delimiter byte ({:02X?}) before length - discarding as likely heartbeat/noise.", current_byte);
-                 raw_len_prefix_bytes.clear(); // Reset raw log
-                 continue; // Read the next byte
-             } else {
-                error!("[RECV] Invalid char in length prefix: {}. Raw prefix read: {:02X?}", current_byte, raw_len_prefix_bytes);
+            // Received unexpected non-digit, non-delimiter byte.
+            // Could be a heartbeat if len_bytes is empty, or an error.
+            if len_bytes.is_empty() {
+                trace!("[RECV] Read non-digit/non-delimiter byte ({:02X?}) before length - discarding as likely heartbeat/noise.", current_byte);
+                raw_len_prefix_bytes.clear(); // Reset raw log
+                continue; // Read the next byte
+            } else {
+                error!(
+                    "[RECV] Invalid char in length prefix: {}. Raw prefix read: {:02X?}",
+                    current_byte, raw_len_prefix_bytes
+                );
                 return Err(PrologError::Io(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
-                    format!("Invalid character in message length prefix: {}", current_byte),
+                    format!(
+                        "Invalid character in message length prefix: {}",
+                        current_byte
+                    ),
                 )));
-             }
+            }
         }
     }
-    debug!("[RECV] Raw length prefix bytes read (including '.'): {:02X?}", raw_len_prefix_bytes);
+    debug!(
+        "[RECV] Raw length prefix bytes read (including '.'): {:02X?}",
+        raw_len_prefix_bytes
+    );
 
     // Consume the newline character(s) after the '.'
     let mut nl_bytes_read = Vec::new();
     match reader.read_exact(&mut byte) {
         Ok(_) => nl_bytes_read.push(byte[0]),
         Err(e) => {
-            error!("[RECV] Error reading byte after '.': {}. Raw prefix read: {:02X?}", e, raw_len_prefix_bytes);
+            error!(
+                "[RECV] Error reading byte after '.': {}. Raw prefix read: {:02X?}",
+                e, raw_len_prefix_bytes
+            );
             return Err(e.into());
         }
     }
 
-    if byte[0] == b'\r' { // Handle potential CRLF
-         // If it was CR, try to read the LF
-         match reader.read_exact(&mut byte) {
+    if byte[0] == b'\r' {
+        // Handle potential CRLF
+        // If it was CR, try to read the LF
+        match reader.read_exact(&mut byte) {
             Ok(_) => nl_bytes_read.push(byte[0]),
-            Err(ref e) if e.kind() == io::ErrorKind::UnexpectedEof => { 
+            Err(ref e) if e.kind() == io::ErrorKind::UnexpectedEof => {
                 // EOF after CR is acceptable if previous read consumed LF implicitly
                 debug!("[RECV] EOF encountered after CR, assuming implicit LF consumed.");
-            },
+            }
             Err(e) => {
-                error!("[RECV] Error reading potential LF after CR: {}. NL bytes read: {:02X?}", e, nl_bytes_read);
+                error!(
+                    "[RECV] Error reading potential LF after CR: {}. NL bytes read: {:02X?}",
+                    e, nl_bytes_read
+                );
                 return Err(e.into()); // Other errors are fatal
             }
-         }
+        }
 
-         if nl_bytes_read.len() > 1 && nl_bytes_read[1] != b'\n' {
-             // If we read something but it wasn't LF, that's unexpected
-             error!("[RECV] Expected LF after CR, got: {:02X?}. NL bytes read: {:02X?}", nl_bytes_read.get(1), nl_bytes_read);
-             return Err(PrologError::Io(std::io::Error::new(
-                 std::io::ErrorKind::InvalidData,
-                 "Expected LF after CR in length delimiter",
-             )));
-         }
+        if nl_bytes_read.len() > 1 && nl_bytes_read[1] != b'\n' {
+            // If we read something but it wasn't LF, that's unexpected
+            error!(
+                "[RECV] Expected LF after CR, got: {:02X?}. NL bytes read: {:02X?}",
+                nl_bytes_read.get(1),
+                nl_bytes_read
+            );
+            return Err(PrologError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "Expected LF after CR in length delimiter",
+            )));
+        }
     } else if byte[0] != b'\n' {
         // If it wasn't CR, it must be LF
-        error!("[RECV] Expected LF after '.', got: {:02X?}. NL bytes read: {:02X?}", byte[0], nl_bytes_read);
+        error!(
+            "[RECV] Expected LF after '.', got: {:02X?}. NL bytes read: {:02X?}",
+            byte[0], nl_bytes_read
+        );
         return Err(PrologError::Io(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             "Expected LF after length delimiter",
         )));
     }
-    debug!("[RECV] Newline bytes consumed after '.': {:02X?}", nl_bytes_read);
+    debug!(
+        "[RECV] Newline bytes consumed after '.': {:02X?}",
+        nl_bytes_read
+    );
 
     // Parse the length string
     let len_str = String::from_utf8(len_bytes.clone()).map_err(|_| {
-        error!("[RECV] Length prefix bytes are not valid UTF-8: {:02X?}", len_bytes);
+        error!(
+            "[RECV] Length prefix bytes are not valid UTF-8: {:02X?}",
+            len_bytes
+        );
         PrologError::Io(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             "Length prefix is not valid UTF-8",
         ))
     })?;
     let len = len_str.parse::<usize>().map_err(|_| {
-        error!("[RECV] Failed to parse message length from string: '{}' (bytes: {:02X?})", len_str, len_bytes);
+        error!(
+            "[RECV] Failed to parse message length from string: '{}' (bytes: {:02X?})",
+            len_str, len_bytes
+        );
         PrologError::Io(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             format!("Failed to parse message length: '{}'", len_str),
@@ -505,11 +632,14 @@ fn receive_message<R: Read + ?Sized>(stream: &mut R) -> Result<String, PrologErr
     debug!("[RECV] Reading message body ({} bytes)...", len);
     let mut message_buf = vec![0; len];
     match reader.read_exact(&mut message_buf) {
-         Ok(_) => debug!("[RECV] Successfully read {} bytes for message body.", len),
-         Err(e) => {
-             error!("[RECV] Error reading message body (expected {} bytes): {}", len, e);
-             return Err(e.into());
-         }
+        Ok(_) => debug!("[RECV] Successfully read {} bytes for message body.", len),
+        Err(e) => {
+            error!(
+                "[RECV] Error reading message body (expected {} bytes): {}",
+                len, e
+            );
+            return Err(e.into());
+        }
     }
     debug!("[RECV] Message body bytes read: {:02X?}", message_buf);
 
@@ -524,4 +654,4 @@ fn receive_message<R: Read + ?Sized>(stream: &mut R) -> Result<String, PrologErr
     debug!("[RECV] Decoded message string: {}", message_str);
     debug!("[RECV] Message received successfully.");
     Ok(message_str)
-} 
+}

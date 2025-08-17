@@ -9,4 +9,4 @@ pub mod types;
 pub use error::PrologError;
 pub use server::{PrologServer, ServerConfig};
 pub use session::PrologSession;
-pub use types::{PrologTerm, PrologCompound, QueryResult}; 
+pub use types::{PrologCompound, PrologTerm, QueryResult};

@@ -1,4 +1,4 @@
-use swipl_rs::{PrologServer, ServerConfig, QueryResult, PrologError};
+use swipl_rs::{PrologError, PrologServer, QueryResult, ServerConfig};
 
 fn main() {
     // Check if SWI-Prolog is available
@@ -6,15 +6,15 @@ fn main() {
         eprintln!("SWI-Prolog not found. Please install SWI-Prolog and ensure it's in your PATH.");
         std::process::exit(1);
     }
-    
+
     let config = ServerConfig::default();
     let mut server = PrologServer::new(config).expect("Failed to create server");
     server.start().expect("Failed to start server");
-    
+
     let mut session = server.connect().expect("Failed to connect");
-    
+
     println!("Demonstrating error handling:");
-    
+
     // Syntax error
     println!("\n1. Testing syntax error:");
     match session.query("invalid syntax ][", None) {
@@ -23,7 +23,7 @@ fn main() {
         }
         _ => println!("   ✗ Unexpected result for syntax error"),
     }
-    
+
     // Undefined predicate
     println!("\n2. Testing undefined predicate:");
     match session.query("undefined_predicate(X)", None) {
@@ -35,7 +35,7 @@ fn main() {
         }
         _ => println!("   ✗ Unexpected result for undefined predicate"),
     }
-    
+
     // Type error
     println!("\n3. Testing type error:");
     match session.query("X is atom + 1", None) {
@@ -44,7 +44,7 @@ fn main() {
         }
         _ => println!("   ✗ Unexpected result for type error"),
     }
-    
+
     // Timeout
     println!("\n4. Testing timeout (this may take a moment):");
     match session.query("sleep(2)", Some(0.1)) {
@@ -56,7 +56,7 @@ fn main() {
         }
         _ => println!("   ✗ Unexpected result for timeout"),
     }
-    
+
     session.close().expect("Failed to close session");
     server.stop(false).expect("Failed to stop server");
 }
