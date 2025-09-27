@@ -55,7 +55,7 @@ has_python :-
 
 has_python(Prog) :-
     exe_options(Options),
-    absolute_file_name(path(python3), Prog, Options).
+    absolute_file_name(path(python), Prog, Options).
 
 exe_options(Options) :-
     current_prolog_flag(windows, true),
