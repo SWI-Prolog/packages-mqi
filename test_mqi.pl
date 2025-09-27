@@ -2,7 +2,7 @@
     Author:        Eric Zinda
     E-mail:        ericz@inductorsoftware.com
     WWW:           http://www.inductorsoftware.com
-    Copyright (c)  2021-2023, Eric Zinda
+    Copyright (c)  2021-2025, Eric Zinda
                               SWI-Prolog Solutions b.v.
     All rights reserved.
 
@@ -40,6 +40,7 @@
 :- use_module(library(process)).
 :- use_module(library(debug)).
 :- use_module(library(mqi)).
+:- use_module(library(error)).
 
 :- debug(test).
 
@@ -55,7 +56,17 @@ has_python :-
 
 has_python(Prog) :-
     exe_options(Options),
-    absolute_file_name(path(python3), Prog, Options).
+    python_candidate(Python),
+    absolute_file_name(path(Python), Prog,
+                       [ file_errors(fail)
+                       | Options
+                       ]),
+    !.
+has_python(_) :-
+    existence_error(program, python).
+
+python_candidate(python3).
+python_candidate(python).
 
 exe_options(Options) :-
     current_prolog_flag(windows, true),

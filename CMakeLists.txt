@@ -18,7 +18,7 @@ install_src(mqi_app
 	    RENAME mqi.pl
 	    DESTINATION ${SWIPL_INSTALL_APP})
 
-find_program(PROG_PYTHON NAMES python3)
+find_program(PROG_PYTHON NAMES python3 python)
 
 if(PROG_PYTHON)
   test_libs(mqi
