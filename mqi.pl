@@ -108,8 +108,8 @@ Redirects STDOUT and STDERR to the file path specified.  Useful for debugging th
 
 */
 :- use_module(library(socket)).
-:- use_module(library(http/json)).
-:- use_module(library(http/json_convert)).
+:- use_module(library(json)).
+:- use_module(library(json_convert)).
 :- use_module(library(http/http_stream)).
 :- use_module(library(option)).
 :- use_module(library(term_to_json)).
