@@ -1051,10 +1051,8 @@ unix_domain_socket_path(Created_Directory, File_Path) :-
                 throw(Exception)
             )
     ),
-    setup_call_cleanup( (   current_prolog_flag(tmp_dir, Save_Tmp_Dir),
-                            set_prolog_flag(tmp_dir, Created_Directory)
-                        ),
+    setup_call_cleanup( push_prolog_flag(tmp_dir, Created_Directory),
                         tmp_file_stream(File_Path, Stream, []),
-                        set_prolog_flag(tmp_dir, Save_Tmp_Dir)
+                        pop_prolog_flag(tmp_dir)
                       ),
     close(Stream).
