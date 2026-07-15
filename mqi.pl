@@ -187,7 +187,7 @@ mqi_start(Options) :-
     option(exit_main_on_failure(Exit_Main_On_Failure), Options, false),
     option(write_connection_values(Write_Connection_Values), Options, false),
     option(unix_domain_socket(Unix_Domain_Socket_Path_And_File), Options, _),
-    (   (   memberchk(unix_domain_socket(_), Options),
+    (   (   option(unix_domain_socket(_), Options),
             var(Unix_Domain_Socket_Path_And_File)
         )
     ->  unix_domain_socket_path(Unix_Domain_Socket_Path, Unix_Domain_Socket_Path_And_File)
