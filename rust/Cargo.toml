@@ -1,0 +1,51 @@
+[package]
+name = "swipl-rs"
+version = "0.1.0"
+edition = "2021"
+description = "A Rust library to interact with SWI-Prolog's Machine Query Interface (MQI)"
+license = "BSD-2-Clause" # Assuming same license as mqi.pl
+authors = ["Younes A <git@younes.io>"] # Placeholder - user should update
+repository = "https://github.com/SWI-Prolog/packages-mqi" # Placeholder
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0.12"
+log = "0.4" # For logging Prolog output and internal library messages
+nix = { version = "0.29", features = ["socket", "uio", "fs"], optional = true } # For Unix Domain Sockets, optional
+uuid = { version = "1.10.0", features = ["v4"], optional = true } # For generating passwords
+subprocess = "0.2"
+
+[features]
+default = ["tcp-ip", "password-gen"] # Default features: TCP/IP communication and password generation
+tcp-ip = []         # Enable TCP/IP socket communication
+unix-socket = ["dep:nix"]
+password-gen = ["dep:uuid"] # Feature to enable password generation
+
+[dev-dependencies]
+env_logger = "0.11"
+tempfile = "3.19.1"
+
+[[example]]
+name = "basic_usage"
+path = "examples/basic_usage.rs"
+
+[[example]]
+name = "async_queries"
+path = "examples/async_queries.rs"
+
+[[example]]
+name = "knowledge_base"
+path = "examples/knowledge_base.rs"
+
+[[example]]
+name = "error_handling"
+path = "examples/error_handling.rs"
+
+[[example]]
+name = "benchmark"
+path = "examples/benchmark.rs"
+
+[[example]]
+name = "concurrent_sessions"
+path = "examples/concurrent_sessions.rs" 
