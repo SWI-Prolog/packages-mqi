@@ -1037,20 +1037,13 @@ write_output_to_file(File) :-
 %    - The path must be below 92 *bytes* long (including null terminator) to
 %           be portable according to the Linux documentation
 %
-% tmp_file finds the right /tmp directory, even on Mac OS, so the path is small
-% Set 700 (rwx------)  permission so it is only accessible by current user
+% tmp_directory finds the right /tmp directory, even on Mac OS, so the path is
+% small, and creates a new directory that is only accessible by current user
 % Create a secure tmp file in the new directory
 % {set,current}_prolog_flag is copied to a thread, so no need to use a mutex.
 % Close the stream so sockets can use it
 unix_domain_socket_path(Created_Directory, File_Path) :-
-    tmp_file(udsock, Created_Directory),
-    make_directory(Created_Directory),
-    catch(  chmod(Created_Directory, urwx),
-            Exception,
-            (   catch(delete_directory(Created_Directory), error(_, _), true),
-                throw(Exception)
-            )
-    ),
+    tmp_directory(udsock, Created_Directory),
     setup_call_cleanup( push_prolog_flag(tmp_dir, Created_Directory),
                         tmp_file_stream(File_Path, Stream, []),
                         pop_prolog_flag(tmp_dir)
