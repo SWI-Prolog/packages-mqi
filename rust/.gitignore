@@ -1,0 +1,7 @@
+# /rust .gitignore
+
+# Cargo.lock
+Cargo.lock
+
+# Target directory
+target/
