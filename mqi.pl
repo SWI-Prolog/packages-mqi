@@ -122,6 +122,9 @@ Redirects STDOUT and STDERR to the file path specified.  Useful for debugging th
 :- use_module(library(prolog_source)).
 :- use_module(library(time)).
 :- use_module(library(uuid)).
+:- use_module(library(apply), [foldl/4, foldl/5, maplist/2]).
+:- use_module(library(error), [syntax_error/1, resource_error/1]).
+
 
 % One for every Machine Query Interface running
 :- dynamic(mqi_thread/3).
@@ -200,11 +203,7 @@ mqi_start(Options) :-
     ),
     option(password(Password), Options, _),
     (   var(Password)
-    ->  (   current_prolog_flag(bounded, false)
-        ->  uuid(UUID, [format(integer)])
-        ;   UUID is random(1<<62)
-        ),
-        format(string(Password), '~d', [UUID])
+    ->  generate_password(Password)
     ;   true
     ),
     string_concat(Password, '.\n', Final_Password),
@@ -550,8 +549,11 @@ communication_thread_listen(Password, Socket, Encoding, Server_Thread_ID, Goal_T
     assert(mqi_socket(Server_Thread_ID, Communication_Thread_ID, Socket, Read_Stream, Write_Stream)),
     set_stream(Read_Stream, encoding(Encoding)),
     set_stream(Write_Stream, encoding(Encoding)),
-    read_message(Read_Stream, Sent_Password),
-    (   Password == Sent_Password
+    (   catch(read_message(Read_Stream, Sent_Password, 4096), _, fail)
+    ->  true
+    ;   Sent_Password = ""              % malformed: a mismatch
+    ),
+    (   same_secret(Password, Sent_Password)
     ->  (   debug(mqi(protocol), "Password matched.", []),
             thread_self(Self_ID),
             mqi_version(Major, Minor),
@@ -937,7 +939,16 @@ write_message(Stream, String) :-
 % the length passed must match the actual number of bytes in the stream
 % in whatever encoding is being used
 read_message(Stream, String) :-
+    read_message(Stream, String, inf).
+
+read_message(Stream, String, MaxLength) :-
     read_string_length(Stream, Length),
+    (   MaxLength == inf
+    ->  true
+    ;   Length =< MaxLength
+    ->  true
+    ;   resource_error(mqi_message_length)
+    ),
     stream_property(Stream, encoding(Encoding)),
     setup_call_cleanup(
          stream_range_open(Stream, Tmp, [size(Length)]),
@@ -954,11 +965,34 @@ write_string_length(Stream, String) :-
     format(Stream, "~d.\n", [Length]).
 
 
-% Note: read_term requires ".\n" after the length
-% ... but does not consume the "\n"
+% The length is a decimal number followed by ".\n".  We do not use
+% read_term/3 as that accepts any term, before the password is checked.
 read_string_length(Stream, Length) :-
-    read_term(Stream, Length, []),
-    get_char(Stream, _).
+    get_char(Stream, C0),
+    skip_layout(Stream, C0, C1),
+    read_length_digits(Stream, C1, 0, 0, Length),
+    get_char(Stream, _).                % the "\n"
+
+skip_layout(Stream, C0, C) :-
+    char_type(C0, space),
+    !,
+    get_char(Stream, C1),
+    skip_layout(Stream, C1, C).
+skip_layout(_, C, C).
+
+read_length_digits(_, '.', N, Length, Length) :-
+    N > 0,
+    !.
+read_length_digits(Stream, C, N, Length0, Length) :-
+    N < 18,
+    char_type(C, digit(W)),
+    !,
+    Length1 is Length0*10+W,
+    N1 is N+1,
+    get_char(Stream, C1),
+    read_length_digits(Stream, C1, N1, Length1, Length).
+read_length_digits(_, C, _, _, _) :-
+    syntax_error(mqi_message_length(C)).
 
 
 % converts a string to Codes using Encoding
@@ -971,6 +1005,58 @@ string_encoding_length(String, Encoding, Length) :-
         ),
         close(Out)).
 
+
+%   generate_password(-Password) is det.
+%
+%   Password is a decimal number string from 128 random bits.  It
+%   protects a server that runs any goal, so it must not be guessable:
+%   use a cryptographically secure source.  Default (version 1) UUIDs
+%   hold the time and MAC address.
+
+generate_password(Password) :-
+    secure_random_bytes(16, Bytes),
+    !,
+    foldl(add_byte, Bytes, 0, Int),
+    format(string(Password), '~d', [Int]).
+generate_password(Password) :-
+    uuid(UUID, [version(4), format(integer)]),
+    format(string(Password), '~d', [UUID]).
+
+add_byte(Byte, Int0, Int) :-
+    Int is Int0*256+Byte.
+
+secure_random_bytes(N, Bytes) :-
+    exists_source(library(crypto)),
+    catch(( use_module(library(crypto), [crypto_n_random_bytes/2]),
+            crypto_n_random_bytes(N, Bytes)
+          ), _, fail),
+    !.
+secure_random_bytes(N, Bytes) :-
+    exists_file('/dev/urandom'),
+    catch(setup_call_cleanup(
+              open('/dev/urandom', read, In, [type(binary)]),
+              ( length(Bytes, N),
+                maplist(get_byte(In), Bytes)
+              ),
+              close(In)),
+          _, fail).
+
+%   same_secret(+Expected, +Sent) is semidet.
+%
+%   Compare the password in time that does not depend on how many
+%   characters match.
+
+same_secret(Expected, Sent) :-
+    string(Sent),
+    string_codes(Expected, EC),
+    string_codes(Sent, SC),
+    length(EC, Len),
+    length(SC, Len),
+    foldl(xor_code, EC, SC, 0, Diff),
+    Diff == 0.
+
+xor_code(C1, C2, D0, D) :-
+    D is D0 \/ (C1 xor C2).
 
 % Convert Prolog Term to a Prolog JSON term
 % Add a final \n so that using netcat to debug works well

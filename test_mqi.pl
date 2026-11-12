@@ -41,6 +41,8 @@
 :- use_module(library(debug)).
 :- use_module(library(mqi)).
 :- use_module(library(error)).
+:- use_module(library(socket)).
+
 
 :- debug(test).
 
@@ -79,6 +81,7 @@ exe_options(Options) :-
 
 
 test_mqi :-
+    run_tests([mqi_security]),
     (   has_python
     ->  run_tests([py_mqi_fast])
     ;   print_message(informational, test_no_python)
@@ -152,3 +155,58 @@ test(mqi, Status == exit(0)):-
 
 prolog:message(test_no_python) -->
     [ 'Could not find Python.  Skipping MQI tests.' ].
+
+
+%   The MQI runs any goal for a client that knows the password.  The
+%   password must not be guessable, and input before the password is
+%   checked must be handled without trusting it.
+
+:- begin_tests(mqi_security, [condition(current_prolog_flag(threads, true))]).
+
+%   A version 1 UUID ends in the MAC address, so passwords made from it
+%   share their low 48 bits.
+
+test(password_not_time_based, true(Low1 \== Low2)) :-
+    mqi:generate_password(P1),
+    mqi:generate_password(P2),
+    number_string(N1, P1),
+    number_string(N2, P2),
+    Low1 is N1 /\ ((1<<48)-1),
+    Low2 is N2 /\ ((1<<48)-1).
+test(long_length_before_password, true(Reply \== "")) :-
+    with_mqi(Port, pre_auth_reply(Port, "99999999999.\n", Reply)).
+test(term_as_length, true(Reply \== "")) :-
+    with_mqi(Port, pre_auth_reply(Port, "f(x, \"y\").\n", Reply)).
+
+:- end_tests(mqi_security).
+
+with_mqi(Port, Goal) :-
+    mqi_start([port(Port), server_thread(Thread)]),
+    call_cleanup(Goal, mqi_stop(Thread)).
+
+%   Send Data as the first message and return what the server replies
+%   within 10 seconds.
+
+pre_auth_reply(Port, Data, Reply) :-
+    setup_call_cleanup(
+        connect_retry(Port, Pair, 50),
+        ( stream_pair(Pair, In, Out),
+          format(Out, "~s", [Data]),
+          flush_output(Out),
+          set_stream(In, timeout(10)),
+          catch(read_string(In, 4, Reply), _, Reply = "")
+        ),
+        close(Pair, [force(true)])).
+
+%   mqi_start/1 returns before the server thread listens.
+
+connect_retry(Port, Pair, N) :-
+    catch(tcp_connect(localhost:Port, Pair, []), E, true),
+    (   var(E)
+    ->  true
+    ;   N > 0
+    ->  sleep(0.05),
+        N1 is N-1,
+        connect_retry(Port, Pair, N1)
+    ;   throw(E)
+    ).
