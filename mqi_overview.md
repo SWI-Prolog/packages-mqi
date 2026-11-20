@@ -248,7 +248,7 @@ You will receive the response below on the receive stream of the same connection
 ...12\ntrue([[]]).\n
 ~~~
 
-### Machine Query Interface Messages Reference {#mqi-messages}
+### Machine Query Interface Messages Reference {#mqi-messages-reference}
 
 The full list of Machine Query Interface messages is described below:
 
